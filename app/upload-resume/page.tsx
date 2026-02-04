@@ -71,8 +71,8 @@ export default function UploadResumePage() {
         
         setProcessingStatus('Processing complete!');
       } else {
-        // Use mock API (demo mode)
-        setProcessingStatus('Processing locally (Demo Mode)...');
+        // Use local processing (backend offline)
+        setProcessingStatus('Processing locally...');
         
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -141,7 +141,7 @@ export default function UploadResumePage() {
               ) : (
                 <>
                   <HardDrive className="h-4 w-4" />
-                  <span>Demo Mode</span>
+                  <span>Offline</span>
                 </>
               )}
             </div>
@@ -237,7 +237,7 @@ export default function UploadResumePage() {
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     {useRealApi && isAuthenticated 
                       ? 'Our spaCy-powered NLP engine extracts key information from each resume including skills, education, and experience.'
-                      : 'Demo mode simulates NLP parsing. Connect to backend for real AI-powered extraction.'
+                      : 'Connect to backend for AI-powered extraction.'
                     }
                   </p>
                 </div>
@@ -249,7 +249,7 @@ export default function UploadResumePage() {
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     {useRealApi && isAuthenticated
                       ? 'Sentence-BERT semantic matching compares candidate skills against job requirements.'
-                      : 'Demo mode uses keyword matching. Connect to backend for ML-powered semantic matching.'
+                      : 'Connect to backend for ML-powered semantic matching.'
                     }
                   </p>
                 </div>
@@ -279,9 +279,9 @@ export default function UploadResumePage() {
               <div className="flex items-start">
                 <AlertCircle className="h-5 w-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-400">Demo Mode Active</p>
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-400">Backend Offline</p>
                   <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                    You&apos;re using simulated data. Start the backend server for real AI-powered resume parsing.
+                    Start the backend server for AI-powered resume parsing.
                   </p>
                 </div>
               </div>

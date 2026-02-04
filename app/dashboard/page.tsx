@@ -194,7 +194,7 @@ export default function DashboardPage() {
                 ) : (
                   <>
                     <HardDrive className="h-4 w-4" />
-                    <span>Demo Mode</span>
+                    <span>Offline</span>
                   </>
                 )}
               </div>

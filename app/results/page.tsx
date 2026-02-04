@@ -75,7 +75,7 @@ export default function ResultsPage() {
                   ) : (
                     <>
                       <HardDrive className="h-4 w-4" />
-                      <span>Demo</span>
+                      <span>Offline</span>
                     </>
                   )}
                 </div>

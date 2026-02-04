@@ -90,7 +90,7 @@ function InterviewAnalyzerContent() {
         addInterview(interview);
         
       } else {
-        // Use mock API (demo mode)
+        // Use local processing (backend offline)
         
         // Step 1: Transcribe
         setCurrentStep('transcribe');
@@ -173,7 +173,7 @@ function InterviewAnalyzerContent() {
               ) : (
                 <>
                   <HardDrive className="h-4 w-4" />
-                  <span>Demo Mode</span>
+                  <span>Offline</span>
                 </>
               )}
             </div>
@@ -434,7 +434,7 @@ function InterviewAnalyzerContent() {
                     <strong className="text-gray-900 dark:text-white">Speech-to-Text:</strong>{' '}
                     {useRealApi && isAuthenticated 
                       ? 'OpenAI Whisper API for accurate transcription'
-                      : 'Simulated transcription (Demo mode)'
+                      : 'Connect to backend for transcription'
                     }
                   </div>
                 </div>
@@ -444,7 +444,7 @@ function InterviewAnalyzerContent() {
                     <strong className="text-gray-900 dark:text-white">Sentiment Analysis:</strong>{' '}
                     {useRealApi && isAuthenticated
                       ? 'Hugging Face Transformers for emotional tone analysis'
-                      : 'Keyword-based sentiment detection (Demo mode)'
+                      : 'Connect to backend for sentiment analysis'
                     }
                   </div>
                 </div>

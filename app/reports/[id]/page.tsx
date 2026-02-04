@@ -49,7 +49,7 @@ export default function CandidateReportPage({ params }: { params: { id: string }
 
   const handleDownloadPdf = async () => {
     if (!useRealApi || !isAuthenticated) {
-      alert('PDF export is available when connected to the backend. Currently in demo mode.');
+      alert('PDF export requires backend connection. Please ensure the server is running.');
       return;
     }
     
@@ -146,7 +146,7 @@ export default function CandidateReportPage({ params }: { params: { id: string }
                 ) : (
                   <>
                     <HardDrive className="h-4 w-4" />
-                    <span>Demo</span>
+                    <span>Offline</span>
                   </>
                 )}
               </div>

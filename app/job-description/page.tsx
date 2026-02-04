@@ -80,7 +80,7 @@ export default function JobDescriptionPage() {
         setJobDescription(jobDesc);
         
       } else {
-        // Use mock API (demo mode)
+        // Use local processing (backend offline)
         setProcessingStep('Extracting skills from description...');
         requiredSkills = await parseJobDescription(description);
         setExtractedSkills(requiredSkills);
@@ -163,7 +163,7 @@ Requirements:
               ) : (
                 <>
                   <HardDrive className="h-4 w-4" />
-                  <span>Demo Mode</span>
+                  <span>Offline</span>
                 </>
               )}
             </div>
@@ -264,7 +264,7 @@ Requirements:
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                 {useRealApi && isAuthenticated 
                   ? 'Our AI will extract key skills using NLP and match candidates with Sentence-BERT'
-                  : 'Demo mode uses keyword matching. Connect to backend for AI-powered extraction.'
+                  : 'Connect to backend for AI-powered extraction.'
                 }
               </p>
             </div>
@@ -339,7 +339,7 @@ Requirements:
                 <span>
                   {useRealApi && isAuthenticated
                     ? 'Our spaCy NLP engine extracts key skills, qualifications, and requirements from your job description'
-                    : 'Keywords are extracted from your job description (Demo mode)'
+                    : 'Keywords are extracted from your job description'
                   }
                 </span>
               </li>
@@ -348,7 +348,7 @@ Requirements:
                 <span>
                   {useRealApi && isAuthenticated
                     ? 'Sentence-BERT semantic matching compares candidate profiles against job requirements'
-                    : 'Candidates are matched based on keyword overlap (Demo mode)'
+                    : 'Candidates are matched based on keyword overlap'
                   }
                 </span>
               </li>
