@@ -1,0 +1,99 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js
+/.next/
+/out/
+
+# Production
+/build
+
+# Misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# ===================
+# Backend (Python)
+# ===================
+
+# Virtual environment
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution
+backend/build/
+backend/dist/
+backend/*.egg-info/
+backend/.eggs/
+
+# Uploads (user files - don't commit)
+backend/uploads/
+uploads/
+
+# Backend environment
+backend/.env
+backend/.env.local
+backend/.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ===================
+# References (large files)
+# ===================
+references/
+*.pdf
+
+# ===================
+# OS generated files
+# ===================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
