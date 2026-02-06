@@ -313,25 +313,6 @@ export default function LoginPage() {
           </Card>
         </motion.div>
 
-        {/* Project Info */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-8"
-        >
-          <Card animate={false}>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-              Project Information
-            </h3>
-            <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-              <p><strong>Project:</strong> Smart Resume Filter & AI HR Assistant</p>
-              <p><strong>Group:</strong> Group 40 – B.E. Computer Engineering (2025–26)</p>
-              <p><strong>Institution:</strong> Sinhgad Academy of Engineering, Pune</p>
-              <p><strong>Guide:</strong> Prof. Mrs. T. S. Hashmi</p>
-            </div>
-          </Card>
-        </motion.div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 # 🚀 Deployment Guide
 ## Smart Resume Filter & AI HR Assistant
 
-**Stack:** DigitalOcean + MongoDB Atlas + Vercel + Namecheap
+**Stack:** Render + MongoDB Atlas + Vercel + Namecheap
 
 ---
 
@@ -10,7 +10,7 @@
 | Component | Platform | Cost |
 |-----------|----------|------|
 | Database | MongoDB Atlas | Free |
-| Backend | DigitalOcean | Free ($200 student credit) |
+| Backend | Render | Free |
 | Frontend | Vercel | Free |
 | Domain | Namecheap | Free (.me student offer) |
 
@@ -32,7 +32,7 @@ git init
 git add .
 
 # Create commit
-git commit -m "Smart Resume Filter - Ready for deployment"
+git commit -m "Smart Resume Filter"
 ```
 
 ### 1.2 Create GitHub Repository
@@ -101,56 +101,52 @@ mongodb+srv://smartresumeapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=C
 
 ---
 
-## Step 3: Deploy Backend to DigitalOcean
+## Step 3: Deploy Backend to Render
 
-### 3.1 Claim Student Credit
+### 3.1 Create Render Account
 
-1. Go to [education.github.com/pack](https://education.github.com/pack)
-2. Find **DigitalOcean** → Claim **$200 credit**
-3. Create DigitalOcean account
+1. Go to [render.com](https://render.com)
+2. Click **Get Started for Free**
+3. Sign up with **GitHub** (recommended)
 
-### 3.2 Create App
+### 3.2 Create Web Service
 
-1. Go to [cloud.digitalocean.com/apps](https://cloud.digitalocean.com/apps)
-2. Click **Create App**
-3. Source: **GitHub**
-4. Authorize and select `smart-resume-filter` repository
-5. Branch: `main`
-6. Click **Next**
+1. Click **New** → **Web Service**
+2. Connect your GitHub account if not already
+3. Select `smart-resume-filter` repository
+4. Click **Connect**
 
-### 3.3 Configure App
-
-Edit the auto-detected resource:
+### 3.3 Configure Service
 
 | Setting | Value |
 |---------|-------|
 | **Name** | `smart-resume-api` |
-| **Source Directory** | `/backend` |
-| **Type** | Web Service |
+| **Region** | Singapore (or nearest) |
+| **Branch** | `main` |
+| **Root Directory** | `backend` |
+| **Runtime** | `Python 3` |
 | **Build Command** | `pip install -r requirements.txt && python -m spacy download en_core_web_sm` |
-| **Run Command** | `uvicorn app.main:app --host 0.0.0.0 --port 8080` |
-| **HTTP Port** | `8080` |
-| **Plan** | Basic ($12/mo) |
+| **Start Command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| **Instance Type** | **Free** |
 
 ### 3.4 Add Environment Variables
 
-Click **Edit** on Environment Variables and add these:
+Click **Advanced** → **Add Environment Variable** and add these:
 
-```
-PORT=8080
-DEBUG=False
-ENVIRONMENT=production
-MONGODB_URI=mongodb+srv://smartresumeapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0
-DATABASE_NAME=smart_resume_filter
-JWT_SECRET_KEY=paste_generated_key_here
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
-FRONTEND_URL=https://temp.vercel.app
-SPACY_MODEL=en_core_web_sm
-SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
-SENTIMENT_MODEL=distilbert-base-uncased-finetuned-sst-2-english
-MAX_FILE_SIZE_MB=10
-```
+| Key | Value |
+|-----|-------|
+| `DEBUG` | `False` |
+| `ENVIRONMENT` | `production` |
+| `MONGODB_URI` | `mongodb+srv://smartresumeapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0` |
+| `DATABASE_NAME` | `smart_resume_filter` |
+| `JWT_SECRET_KEY` | `paste_generated_key_here` |
+| `JWT_ALGORITHM` | `HS256` |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` |
+| `FRONTEND_URL` | `https://temp.vercel.app` |
+| `SPACY_MODEL` | `en_core_web_sm` |
+| `SENTENCE_TRANSFORMER_MODEL` | `all-MiniLM-L6-v2` |
+| `SENTIMENT_MODEL` | `distilbert-base-uncased-finetuned-sst-2-english` |
+| `MAX_FILE_SIZE_MB` | `10` |
 
 **Generate JWT_SECRET_KEY:**
 ```bash
@@ -159,18 +155,20 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ### 3.5 Deploy
 
-1. Click **Next** through remaining steps
-2. Click **Create Resources**
-3. Wait 5-10 minutes for deployment
+1. Click **Create Web Service**
+2. Wait 5-10 minutes for deployment
+3. Render will show build logs
 
 ### 3.6 Get Backend URL
 
 After deployment completes, your URL will be:
 ```
-https://smart-resume-api-xxxxx.ondigitalocean.app
+https://smart-resume-api.onrender.com
 ```
 
 **Test it:** Open `https://YOUR-BACKEND-URL/docs` in browser
+
+> **Note:** Free tier services spin down after inactivity. First request may take 30-60 seconds.
 
 ---
 
@@ -194,7 +192,7 @@ https://smart-resume-api-xxxxx.ondigitalocean.app
 
 | Key | Value |
 |-----|-------|
-| `NEXT_PUBLIC_API_URL` | `https://smart-resume-api-xxxxx.ondigitalocean.app/api` |
+| `NEXT_PUBLIC_API_URL` | `https://smart-resume-api.onrender.com` |
 | `NEXT_PUBLIC_USE_REAL_API` | `true` |
 
 ### 4.4 Deploy
@@ -212,15 +210,15 @@ Your URL: `https://smart-resume-filter.vercel.app`
 
 ### 5.1 Update Backend CORS
 
-Go back to DigitalOcean:
-1. App → Settings → Environment Variables
+Go back to Render:
+1. Dashboard → `smart-resume-api` → **Environment**
 2. Update `FRONTEND_URL`:
 
 ```
 FRONTEND_URL=https://smart-resume-filter.vercel.app
 ```
 
-3. Click **Save** → App will redeploy
+3. Click **Save Changes** → Service will redeploy
 
 ### 5.2 Test the Application
 
@@ -265,31 +263,32 @@ FRONTEND_URL=https://smart-resume-filter.vercel.app
 
 For `api.smartresumefilter.me`:
 
-**In DigitalOcean:**
-1. App → Settings → Domains → **Add Domain**
-2. Enter: `api.smartresumefilter.me`
+**In Render:**
+1. Dashboard → `smart-resume-api` → **Settings** → **Custom Domains**
+2. Click **Add Custom Domain**
+3. Enter: `api.smartresumefilter.me`
 
 **In Namecheap:**
 Add this record:
 
 | Type | Host | Value | TTL |
 |------|------|-------|-----|
-| CNAME | api | `smart-resume-api-xxxxx.ondigitalocean.app` | Automatic |
+| CNAME | api | `smart-resume-api.onrender.com` | Automatic |
 
 ### 6.5 Update Environment Variables
 
-**DigitalOcean (Backend):**
+**Render (Backend):**
 ```
 FRONTEND_URL=https://smartresumefilter.me
 ```
 
 **Vercel (Frontend):**
 ```
-NEXT_PUBLIC_API_URL=https://api.smartresumefilter.me/api
+NEXT_PUBLIC_API_URL=https://api.smartresumefilter.me
 ```
 Or if not using api subdomain:
 ```
-NEXT_PUBLIC_API_URL=https://smart-resume-api-xxxxx.ondigitalocean.app/api
+NEXT_PUBLIC_API_URL=https://smart-resume-api.onrender.com
 ```
 
 ---
@@ -303,7 +302,7 @@ NEXT_PUBLIC_API_URL=https://smart-resume-api-xxxxx.ondigitalocean.app/api
 | Database user created | ⬜ |
 | Network access configured | ⬜ |
 | Connection string obtained | ⬜ |
-| DigitalOcean app created | ⬜ |
+| Render web service created | ⬜ |
 | Backend environment variables set | ⬜ |
 | Backend deployed successfully | ⬜ |
 | Vercel project created | ⬜ |
@@ -320,8 +319,8 @@ NEXT_PUBLIC_API_URL=https://smart-resume-api-xxxxx.ondigitalocean.app/api
 | Service | URL |
 |---------|-----|
 | Frontend | `https://smartresumefilter.me` |
-| Backend API | `https://smart-resume-api-xxxxx.ondigitalocean.app` |
-| API Docs | `https://smart-resume-api-xxxxx.ondigitalocean.app/docs` |
+| Backend API | `https://smart-resume-api.onrender.com` |
+| API Docs | `https://smart-resume-api.onrender.com/docs` |
 | MongoDB | Atlas Dashboard |
 
 ---
@@ -329,15 +328,20 @@ NEXT_PUBLIC_API_URL=https://smart-resume-api-xxxxx.ondigitalocean.app/api
 ## 🔧 Quick Troubleshooting
 
 ### CORS Error
-→ Check `FRONTEND_URL` in DigitalOcean matches your Vercel URL exactly (with https://)
+→ Check `FRONTEND_URL` in Render matches your Vercel URL exactly (with https://)
 
 ### Database Connection Failed
 → Verify MongoDB URI and password are correct
 → Check Network Access allows 0.0.0.0/0
 
 ### Backend Won't Start
-→ Check DigitalOcean logs
+→ Check Render logs (Dashboard → Logs)
 → Verify all environment variables are set
+
+### Backend Slow on First Request
+→ Free tier spins down after inactivity
+→ First request takes 30-60 seconds to wake up
+→ Upgrade to paid tier for always-on ($7/mo)
 
 ### Login Not Working
 → Open browser console (F12) for errors
@@ -345,20 +349,11 @@ NEXT_PUBLIC_API_URL=https://smart-resume-api-xxxxx.ondigitalocean.app/api
 
 ---
 
-## 📊 Monitor Your Credit
-
-DigitalOcean: [cloud.digitalocean.com/account/billing](https://cloud.digitalocean.com/account/billing)
-
-At $12/month, your $200 credit lasts **~16 months**.
-
----
-
 ## 🔐 Environment Variables Reference
 
-### Backend (DigitalOcean)
+### Backend (Render)
 
 ```env
-PORT=8080
 DEBUG=False
 ENVIRONMENT=production
 MONGODB_URI=mongodb+srv://smartresumeapp:PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0
@@ -376,7 +371,7 @@ MAX_FILE_SIZE_MB=10
 ### Frontend (Vercel)
 
 ```env
-NEXT_PUBLIC_API_URL=https://smart-resume-api-xxxxx.ondigitalocean.app/api
+NEXT_PUBLIC_API_URL=https://smart-resume-api.onrender.com
 NEXT_PUBLIC_USE_REAL_API=true
 ```
 

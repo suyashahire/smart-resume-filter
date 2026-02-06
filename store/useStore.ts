@@ -43,6 +43,7 @@ interface StoreState {
   resumes: Resume[];
   filteredResumes: Resume[];
   addResume: (resume: Resume) => void;
+  removeResume: (id: string) => void;
   setResumes: (resumes: Resume[]) => void;
   setFilteredResumes: (resumes: Resume[]) => void;
   clearAllData: () => void;
@@ -96,6 +97,11 @@ export const useStore = create<StoreState>()(
       // Resume actions
       addResume: (resume) => set((state) => ({ 
         resumes: [...state.resumes, resume]
+      })),
+      
+      removeResume: (id) => set((state) => ({
+        resumes: state.resumes.filter(r => r.id !== id),
+        filteredResumes: state.filteredResumes.filter(r => r.id !== id)
       })),
       
       setResumes: (resumes) => set({ resumes }),

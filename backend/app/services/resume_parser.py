@@ -253,50 +253,167 @@ class ResumeParserService:
     
     def _extract_education(self, text: str) -> str:
         """Extract education information."""
-        text_lower = text.lower()
+        # Normalize the text - handle both newlines and common section breaks
+        # Split on newlines and also on common patterns that indicate new sections
+        lines = re.split(r'\n|(?=\b(?:experience|skills|projects|certifications|computer skills|technical skills|work history|employment)\b)', text, flags=re.IGNORECASE)
+        lines = [l.strip() for l in lines if l.strip()]
         
-        # Look for education section
-        education_section = ""
+        # Find the education section
+        education_lines = []
+        in_education_section = False
         
-        # Common section headers
-        headers = ["education", "academic", "qualification", "degree"]
+        # Section headers that start education
+        start_headers = ["education", "academic background", "academic qualifications", 
+                        "qualifications", "educational background", "academics"]
         
-        for header in headers:
-            pattern = rf'{header}[:\s]*\n(.*?)(?=\n\n|\nexperience|\nwork|\nskills|\nprojects|$)'
-            match = re.search(pattern, text_lower, re.DOTALL | re.IGNORECASE)
-            if match:
-                education_section = match.group(1).strip()
+        # Section headers that end education (expanded list)
+        end_headers = ["experience", "work history", "employment", "skills", "projects", 
+                      "certifications", "achievements", "publications", "references",
+                      "technical skills", "professional experience", "work experience",
+                      "computer skills", "programming", "languages:", "tools", "frameworks",
+                      "abilities", "competencies", "expertise"]
+        
+        for line in lines:
+            line_lower = line.lower().strip()
+            
+            # Skip empty lines
+            if not line_lower:
+                continue
+            
+            # Check if this line is a section header that starts education
+            is_edu_header = any(line_lower.startswith(header) or line_lower == header 
+                               for header in start_headers)
+            if is_edu_header and len(line_lower) < 50:
+                in_education_section = True
+                continue
+            
+            # Check if we're leaving education section (another section starts)
+            is_end_header = any(line_lower.startswith(header) or header in line_lower[:30] 
+                               for header in end_headers)
+            if in_education_section and is_end_header and len(line_lower) < 50:
                 break
+            
+            # Collect education content
+            if in_education_section:
+                # Skip lines that look like skill lists
+                if re.match(r'^(python|java|c\+\+|javascript|html|css|sql|react|node)', line_lower):
+                    break  # We've hit the skills section
+                education_lines.append(line.strip())
         
-        if education_section:
-            # Clean up and return first 200 chars
-            education_section = ' '.join(education_section.split())
-            return education_section[:200]
+        if education_lines:
+            # Format nicely
+            result = ' | '.join(education_lines)
+            return result[:600] if len(result) > 600 else result
         
-        # Fallback: Look for degree keywords
-        for keyword in self.education_keywords:
-            pattern = rf'.*{keyword}.*'
-            match = re.search(pattern, text_lower)
-            if match:
-                line = match.group(0).strip()
-                return line[:200]
+        # Fallback: Extract education info using patterns
+        education_info = []
+        
+        # Look for university/college names with dates
+        uni_pattern = r'([A-Z][a-zA-Z\s\-,]+(?:University|College|Institute|School)[^|]*?(?:19|20)\d{2})'
+        uni_matches = re.findall(uni_pattern, text)
+        for match in uni_matches[:2]:
+            education_info.append(match.strip())
+        
+        # Look for degree mentions
+        degree_pattern = r'((?:Bachelor|Master|Ph\.?D|B\.?S\.?|M\.?S\.?|B\.?Tech|M\.?Tech|B\.?E\.?|M\.?E\.?)[^|]*?(?:in\s+)?[A-Za-z\s]+(?:Science|Engineering|Technology|Arts|Commerce)?)'
+        degree_matches = re.findall(degree_pattern, text, re.IGNORECASE)
+        for match in degree_matches[:2]:
+            cleaned = match.strip()
+            if cleaned and cleaned not in education_info:
+                education_info.append(cleaned)
+        
+        # Look for GPA
+        gpa_pattern = r'(?:GPA|CGPA)[:\s]*(\d+\.?\d*(?:\s*/\s*\d+\.?\d*)?)'
+        gpa_match = re.search(gpa_pattern, text, re.IGNORECASE)
+        if gpa_match:
+            education_info.append(f"GPA: {gpa_match.group(1)}")
+        
+        if education_info:
+            result = ' | '.join(education_info)
+            return result[:600] if len(result) > 600 else result
         
         return ""
     
     def _extract_experience(self, text: str) -> str:
         """Extract work experience information."""
-        text_lower = text.lower()
+        # Normalize the text - handle both newlines and common section breaks
+        lines = re.split(r'\n|(?=\b(?:education|skills|projects|certifications|technical skills|academic)\b)', text, flags=re.IGNORECASE)
+        lines = [l.strip() for l in lines if l.strip()]
         
-        # Look for experience section
-        headers = ["experience", "work history", "employment", "professional experience"]
+        # Find the experience section
+        experience_lines = []
+        in_experience_section = False
         
-        for header in headers:
-            pattern = rf'{header}[:\s]*\n(.*?)(?=\n\n|\neducation|\nskills|\nprojects|$)'
-            match = re.search(pattern, text_lower, re.DOTALL | re.IGNORECASE)
-            if match:
-                experience_section = match.group(1).strip()
-                experience_section = ' '.join(experience_section.split())
-                return experience_section[:300]
+        # Section headers that start experience
+        start_headers = ["experience", "work history", "employment history", "employment",
+                        "professional experience", "work experience", "career history",
+                        "professional background", "relevant experience", "internship"]
+        
+        # Section headers that end experience
+        end_headers = ["education", "skills", "projects", "certifications", "achievements",
+                      "publications", "references", "technical skills", "academic",
+                      "qualifications", "training", "courses", "interests", "hobbies",
+                      "computer skills", "programming skills", "languages"]
+        
+        for line in lines:
+            line_lower = line.lower().strip()
+            
+            # Skip empty lines
+            if not line_lower:
+                continue
+            
+            # Check if this line is a section header that starts experience
+            is_exp_header = any(line_lower.startswith(header) or line_lower == header 
+                               for header in start_headers)
+            if is_exp_header and len(line_lower) < 60:
+                in_experience_section = True
+                continue
+            
+            # Check if we're leaving experience section
+            is_end_header = any(line_lower.startswith(header) or header in line_lower[:30] 
+                               for header in end_headers)
+            if in_experience_section and is_end_header and len(line_lower) < 50:
+                break
+            
+            # Collect experience content
+            if in_experience_section:
+                experience_lines.append(line.strip())
+        
+        if experience_lines:
+            # Format with separators
+            result = ' | '.join(experience_lines)
+            return result[:1000] if len(result) > 1000 else result
+        
+        # Fallback: Extract experience using patterns
+        experience_info = []
+        
+        # Look for job titles with company names
+        job_pattern = r'((?:Software|Data|Web|Full[- ]?Stack|Frontend|Backend|Mobile|DevOps|Cloud|ML|AI|Machine Learning)?[\s]?(?:Developer|Engineer|Analyst|Designer|Intern|Manager|Architect|Consultant|Specialist)[^|]*)'
+        job_matches = re.findall(job_pattern, text, re.IGNORECASE)
+        for match in job_matches[:3]:
+            cleaned = match.strip()
+            if len(cleaned) > 10 and cleaned not in experience_info:
+                experience_info.append(cleaned)
+        
+        # Look for action verbs with context (common in experience descriptions)
+        action_pattern = r'((?:Developed|Designed|Implemented|Built|Created|Managed|Led|Worked|Collaborated|Utilized|Learned)[^.!?|]{20,150})'
+        action_matches = re.findall(action_pattern, text, re.IGNORECASE)
+        for match in action_matches[:5]:
+            cleaned = match.strip()
+            if cleaned and cleaned not in experience_info:
+                experience_info.append(cleaned)
+        
+        # Look for date ranges (common in experience)
+        date_pattern = r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}[^|]*?(?:Present|Current|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}))'
+        date_matches = re.findall(date_pattern, text, re.IGNORECASE)
+        for match in date_matches[:3]:
+            cleaned = match.strip()
+            if cleaned and cleaned not in experience_info:
+                experience_info.append(cleaned)
+        
+        if experience_info:
+            result = ' | '.join(experience_info)
+            return result[:1000] if len(result) > 1000 else result
         
         return ""
     

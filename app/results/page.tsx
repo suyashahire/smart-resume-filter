@@ -1,16 +1,40 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Trophy, Mail, Phone, FileText, MessageSquare, AlertCircle, Cloud, HardDrive, CheckCircle } from 'lucide-react';
+import { Trophy, Mail, Phone, FileText, MessageSquare, AlertCircle, Cloud, HardDrive, CheckCircle, Trash2 } from 'lucide-react';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import { useStore } from '@/store/useStore';
+import * as api from '@/lib/api';
 
 export default function ResultsPage() {
   const router = useRouter();
-  const { filteredResumes, jobDescription, useRealApi, isAuthenticated } = useStore();
+  const { filteredResumes, jobDescription, useRealApi, isAuthenticated, removeResume } = useStore();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteCandidate = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      // Delete from backend if using real API
+      if (useRealApi && isAuthenticated) {
+        await api.deleteResume(id);
+      }
+      // Remove from local store
+      removeResume(id);
+    } catch (error) {
+      console.error('Error deleting candidate:', error);
+      alert('Failed to delete candidate. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (filteredResumes.length === 0) {
     return (
@@ -234,6 +258,16 @@ export default function ResultsPage() {
                         Analyze Interview
                       </Button>
                     </Link>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800"
+                      onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
+                      disabled={deletingId === candidate.id}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      {deletingId === candidate.id ? 'Deleting...' : 'Delete'}
+                    </Button>
                   </div>
                 </div>
               </Card>
