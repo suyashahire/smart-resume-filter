@@ -1,5 +1,5 @@
 # 🚀 Deployment Guide
-## Smart Resume Filter & AI HR Assistant
+## HireQ - AI-Powered Recruitment Platform
 
 **Stack:** Render + MongoDB Atlas + Vercel + Namecheap
 
@@ -32,20 +32,20 @@ git init
 git add .
 
 # Create commit
-git commit -m "Smart Resume Filter"
+git commit -m "Initial HireQ commit"
 ```
 
 ### 1.2 Create GitHub Repository
 
 1. Go to [github.com/new](https://github.com/new)
-2. Name: `smart-resume-filter`
+2. Name: `hireq`
 3. Keep it **Public**
 4. Click **Create repository**
 
 ### 1.3 Push Code
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/smart-resume-filter.git
+git remote add origin https://github.com/YOUR_USERNAME/hireq.git
 git branch -M main
 git push -u origin main
 ```
@@ -57,7 +57,7 @@ git push -u origin main
 ### 2.1 Create Cluster
 
 1. Go to [mongodb.com/atlas](https://mongodb.com/atlas) → Sign up/Login
-2. Create new project: `smart-resume-filter`
+2. Create new project: `hireq`
 3. Click **Build a Database**
 4. Select **M0 FREE**
 5. Provider: **AWS**, Region: **Mumbai** (or nearest)
@@ -68,7 +68,7 @@ git push -u origin main
 
 1. Left sidebar → **SECURITY** → **Database & Network Access**
 2. **Database Users** tab → **Add New Database User**
-3. Username: `smartresumeapp`
+3. Username: `hireqapp`
 4. Password: Click **Autogenerate Secure Password**
 5. **📋 COPY AND SAVE THE PASSWORD!**
 6. Privileges: **Read and write to any database**
@@ -89,14 +89,14 @@ git push -u origin main
 4. Copy the connection string:
 
 ```
-mongodb+srv://smartresumeapp:<password>@cluster0.xxxxx.mongodb.net/?appName=Cluster0
+mongodb+srv://hireqapp:<password>@cluster0.xxxxx.mongodb.net/?appName=Cluster0
 ```
 
 5. Replace `<password>` with your actual password
 
 **Your MongoDB URI:**
 ```
-mongodb+srv://smartresumeapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0
+mongodb+srv://hireqapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0
 ```
 
 ---
@@ -113,14 +113,14 @@ mongodb+srv://smartresumeapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=C
 
 1. Click **New** → **Web Service**
 2. Connect your GitHub account if not already
-3. Select `smart-resume-filter` repository
+3. Select `hireq` repository
 4. Click **Connect**
 
 ### 3.3 Configure Service
 
 | Setting | Value |
 |---------|-------|
-| **Name** | `smart-resume-api` |
+| **Name** | `hireq-api` |
 | **Region** | Singapore (or nearest) |
 | **Branch** | `main` |
 | **Root Directory** | `backend` |
@@ -137,8 +137,8 @@ Click **Advanced** → **Add Environment Variable** and add these:
 |-----|-------|
 | `DEBUG` | `False` |
 | `ENVIRONMENT` | `production` |
-| `MONGODB_URI` | `mongodb+srv://smartresumeapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0` |
-| `DATABASE_NAME` | `smart_resume_filter` |
+| `MONGODB_URI` | `mongodb+srv://hireqapp:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0` |
+| `DATABASE_NAME` | `hireq` |
 | `JWT_SECRET_KEY` | `paste_generated_key_here` |
 | `JWT_ALGORITHM` | `HS256` |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` |
@@ -163,7 +163,7 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 After deployment completes, your URL will be:
 ```
-https://smart-resume-api.onrender.com
+https://hireq-api.onrender.com
 ```
 
 **Test it:** Open `https://YOUR-BACKEND-URL/docs` in browser
@@ -178,7 +178,7 @@ https://smart-resume-api.onrender.com
 
 1. Go to [vercel.com](https://vercel.com) → Sign up with GitHub
 2. Click **Add New** → **Project**
-3. Select `smart-resume-filter` repository
+3. Select `hireq` repository
 4. Click **Import**
 
 ### 4.2 Configure
@@ -192,7 +192,7 @@ https://smart-resume-api.onrender.com
 
 | Key | Value |
 |-----|-------|
-| `NEXT_PUBLIC_API_URL` | `https://smart-resume-api.onrender.com` |
+| `NEXT_PUBLIC_API_URL` | `https://hireq-api.onrender.com` |
 | `NEXT_PUBLIC_USE_REAL_API` | `true` |
 
 ### 4.4 Deploy
@@ -202,7 +202,7 @@ https://smart-resume-api.onrender.com
 
 ### 4.5 Get Frontend URL
 
-Your URL: `https://smart-resume-filter.vercel.app`
+Your URL: `https://hireq.vercel.app`
 
 ---
 
@@ -211,18 +211,18 @@ Your URL: `https://smart-resume-filter.vercel.app`
 ### 5.1 Update Backend CORS
 
 Go back to Render:
-1. Dashboard → `smart-resume-api` → **Environment**
+1. Dashboard → `hireq-api` → **Environment**
 2. Update `FRONTEND_URL`:
 
 ```
-FRONTEND_URL=https://smart-resume-filter.vercel.app
+FRONTEND_URL=https://hireq.vercel.app
 ```
 
 3. Click **Save Changes** → Service will redeploy
 
 ### 5.2 Test the Application
 
-1. Open `https://smart-resume-filter.vercel.app`
+1. Open `https://hireq.vercel.app`
 2. Register a new account or login
 3. Upload a resume
 4. Create a job description
@@ -236,12 +236,12 @@ FRONTEND_URL=https://smart-resume-filter.vercel.app
 
 1. Go to [education.github.com/pack](https://education.github.com/pack)
 2. Find **Namecheap** → Claim free `.me` domain
-3. Register: `smartresumefilter.me` (or your choice)
+3. Register: `hireq.me` (or your choice)
 
 ### 6.2 Add Domain to Vercel
 
 1. Vercel → Your Project → **Settings** → **Domains**
-2. Enter: `smartresumefilter.me`
+2. Enter: `hireq.me`
 3. Click **Add**
 4. Note the DNS records Vercel shows
 
@@ -261,34 +261,34 @@ FRONTEND_URL=https://smart-resume-filter.vercel.app
 
 ### 6.4 Add API Subdomain (Optional)
 
-For `api.smartresumefilter.me`:
+For `api.hireq.me`:
 
 **In Render:**
 1. Dashboard → `smart-resume-api` → **Settings** → **Custom Domains**
 2. Click **Add Custom Domain**
-3. Enter: `api.smartresumefilter.me`
+3. Enter: `api.hireq.me`
 
 **In Namecheap:**
 Add this record:
 
 | Type | Host | Value | TTL |
 |------|------|-------|-----|
-| CNAME | api | `smart-resume-api.onrender.com` | Automatic |
+| CNAME | api | `hireq-api.onrender.com` | Automatic |
 
 ### 6.5 Update Environment Variables
 
 **Render (Backend):**
 ```
-FRONTEND_URL=https://smartresumefilter.me
+FRONTEND_URL=https://hireq.me
 ```
 
 **Vercel (Frontend):**
 ```
-NEXT_PUBLIC_API_URL=https://api.smartresumefilter.me
+NEXT_PUBLIC_API_URL=https://api.hireq.me
 ```
 Or if not using api subdomain:
 ```
-NEXT_PUBLIC_API_URL=https://smart-resume-api.onrender.com
+NEXT_PUBLIC_API_URL=https://hireq-api.onrender.com
 ```
 
 ---
@@ -318,9 +318,9 @@ NEXT_PUBLIC_API_URL=https://smart-resume-api.onrender.com
 
 | Service | URL |
 |---------|-----|
-| Frontend | `https://smartresumefilter.me` |
-| Backend API | `https://smart-resume-api.onrender.com` |
-| API Docs | `https://smart-resume-api.onrender.com/docs` |
+| Frontend | `https://hireq.me` |
+| Backend API | `https://hireq-api.onrender.com` |
+| API Docs | `https://hireq-api.onrender.com/docs` |
 | MongoDB | Atlas Dashboard |
 
 ---
@@ -356,12 +356,12 @@ NEXT_PUBLIC_API_URL=https://smart-resume-api.onrender.com
 ```env
 DEBUG=False
 ENVIRONMENT=production
-MONGODB_URI=mongodb+srv://smartresumeapp:PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0
-DATABASE_NAME=smart_resume_filter
+MONGODB_URI=mongodb+srv://hireqapp:PASSWORD@cluster0.xxxxx.mongodb.net/?appName=Cluster0
+DATABASE_NAME=hireq
 JWT_SECRET_KEY=your-64-character-secret-key
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
-FRONTEND_URL=https://smartresumefilter.me
+FRONTEND_URL=https://hireq.me
 SPACY_MODEL=en_core_web_sm
 SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
 SENTIMENT_MODEL=distilbert-base-uncased-finetuned-sst-2-english
@@ -371,11 +371,10 @@ MAX_FILE_SIZE_MB=10
 ### Frontend (Vercel)
 
 ```env
-NEXT_PUBLIC_API_URL=https://smart-resume-api.onrender.com
+NEXT_PUBLIC_API_URL=https://hireq-api.onrender.com
 NEXT_PUBLIC_USE_REAL_API=true
 ```
 
 ---
 
-**Project:** Group 40 - Sinhgad Academy of Engineering, Pune  
-**Guide:** Prof. Mrs. T. S. Hashmi
+**HireQ** - AI-Powered Recruitment Platform

@@ -1,5 +1,5 @@
 """
-Smart Resume Filter & AI HR Assistant - Main FastAPI Application
+HireQ - AI-Powered Recruitment Platform - Main FastAPI Application
 """
 
 from fastapi import FastAPI
@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup
     await connect_to_mongo()
-    print("🚀 Smart Resume Filter API is starting up...")
+    print("🚀 HireQ API is starting up...")
     print(f"📊 Connected to MongoDB: {settings.DATABASE_NAME}")
     
     # Pre-load ML models to avoid first-request lag
@@ -50,14 +50,14 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     await close_mongo_connection()
-    print("👋 Smart Resume Filter API is shutting down...")
+    print("👋 HireQ API is shutting down...")
 
 
 # Create FastAPI application
 app = FastAPI(
-    title="Smart Resume Filter & AI HR Assistant API",
+    title="HireQ API",
     description="""
-    AI-powered recruitment platform for automated candidate screening and interview evaluation.
+    HireQ - AI-powered recruitment platform for intelligent candidate screening and interview evaluation.
     
     ## Features
     - 📄 Resume Parsing with NLP
@@ -65,9 +65,6 @@ app = FastAPI(
     - 🎤 Interview Transcription & Analysis
     - 📊 Sentiment & Confidence Scoring
     - 📋 Comprehensive Candidate Reports
-    
-    ## Group 40 - B.E. Computer Engineering (2025-26)
-    Sinhgad Academy of Engineering, Pune
     """,
     version="1.0.0",
     lifespan=lifespan
@@ -116,11 +113,10 @@ app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 async def root():
     """Root endpoint - API health check."""
     return {
-        "message": "Smart Resume Filter & AI HR Assistant API",
+        "message": "HireQ API",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/docs",
-        "project": "Group 40 - B.E. Computer Engineering (2025-26)"
+        "docs": "/docs"
     }
 
 

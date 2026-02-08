@@ -1,5 +1,5 @@
 """
-Configuration settings for the Smart Resume Filter & AI HR Assistant backend.
+Configuration settings for the HireQ backend.
 """
 
 from pydantic_settings import BaseSettings
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     # MongoDB Configuration
     MONGODB_URI: str = "mongodb://localhost:27017"
-    DATABASE_NAME: str = "smart_resume_filter"
+    DATABASE_NAME: str = "hireq"
     
     # JWT Configuration
     JWT_SECRET_KEY: str = "your-super-secret-jwt-key-change-in-production"
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # AWS S3 Configuration
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_S3_BUCKET: str = "smart-resume-uploads"
+    AWS_S3_BUCKET: str = "hireq-uploads"
     AWS_REGION: str = "us-east-1"
     
     # Frontend URL (for CORS)

@@ -1,6 +1,6 @@
-# 🎯 Smart Resume Filter & AI HR Assistant
+# 🎯 HireQ
 
-An AI-powered recruitment platform for automated candidate screening and interview evaluation.
+AI-powered recruitment platform for intelligent candidate screening and interview evaluation.
 
 ![Next.js](https://img.shields.io/badge/Next.js-14-black)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-green)
@@ -125,26 +125,12 @@ NEXT_PUBLIC_USE_REAL_API=true
 
 ```env
 MONGODB_URI=mongodb+srv://...
-DATABASE_NAME=smart_resume_filter
+DATABASE_NAME=hireq
 JWT_SECRET_KEY=your-secret-key
 FRONTEND_URL=http://localhost:3000
 ```
 
 See `backend/env.example` for all options.
-
----
-
-## 👥 Team
-
-**Group 40 - B.E. Computer Engineering (2025-26)**  
-Sinhgad Academy of Engineering, Pune
-
-- Adinath Sayaji Deshmukh (COBA63)
-- Suyash Shamrao Ahire (COBA64)
-- Raviraj Pandurang Malule (COBA68)
-- Prajwal Nanaso Arjun (COBC10)
-
-**Guide:** Prof. Mrs. T. S. Hashmi
 
 ---
 

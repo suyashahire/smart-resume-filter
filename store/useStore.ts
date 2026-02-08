@@ -171,7 +171,7 @@ export const useStore = create<StoreState>()(
       setError: (error) => set({ error }),
     }),
     {
-      name: 'smart-resume-filter-storage',
+      name: 'hireq-storage',
       partialize: (state) => ({
         user: state.user,
         authToken: state.authToken,

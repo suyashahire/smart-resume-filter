@@ -1,12 +1,12 @@
 """
-Run script for the Smart Resume Filter & AI HR Assistant backend.
+Run script for the HireQ backend.
 """
 
 import uvicorn
 from app.config import settings
 
 if __name__ == "__main__":
-    print("🚀 Starting Smart Resume Filter & AI HR Assistant Backend...")
+    print("🚀 Starting HireQ Backend...")
     print(f"📍 Server running at http://{settings.HOST}:{settings.PORT}")
     print(f"📚 API Documentation at http://{settings.HOST}:{settings.PORT}/docs")
     print(f"🔧 Environment: {settings.ENVIRONMENT}")

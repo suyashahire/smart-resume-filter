@@ -1,4 +1,4 @@
-# Smart Resume Filter & AI HR Assistant - Backend Dockerfile
+# HireQ - Backend Dockerfile
 # Optimized for production deployment
 
 FROM python:3.11-slim

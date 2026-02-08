@@ -7,8 +7,8 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Smart Resume Filter & AI HR Assistant",
-  description: "AI-powered recruitment platform for automated candidate screening and interview evaluation",
+  title: "HireQ - AI-Powered Recruitment Platform",
+  description: "HireQ - Intelligent candidate screening and interview evaluation powered by AI",
 };
 
 export default function RootLayout({

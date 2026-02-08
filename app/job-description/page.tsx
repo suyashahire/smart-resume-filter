@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Sparkles, AlertCircle, Cloud, HardDrive, Zap } from 'lucide-react';
+import { Briefcase, Sparkles, AlertCircle, Cloud, HardDrive, Zap, ArrowRight, ArrowLeft, FileText, Target, Brain, CheckCircle } from 'lucide-react';
 import Button from '@/components/Button';
-import Card from '@/components/Card';
 import { useStore } from '@/store/useStore';
 import { parseJobDescription, screenCandidates } from '@/lib/mockApi';
 import * as api from '@/lib/api';
@@ -40,7 +39,6 @@ export default function JobDescriptionPage() {
       let rankedCandidates: typeof resumes = [];
 
       if (useRealApi && isAuthenticated) {
-        // Use real backend API
         setProcessingStep('Creating job description...');
         
         const jobResponse = await api.createJobDescription({
@@ -54,7 +52,6 @@ export default function JobDescriptionPage() {
         
         setProcessingStep('Screening candidates with AI...');
         
-        // Screen candidates
         const results = await api.screenCandidates(jobResponse.id);
         
         rankedCandidates = results.map(r => ({
@@ -69,7 +66,6 @@ export default function JobDescriptionPage() {
           skillMatches: r.skill_matches
         }));
 
-        // Store job ID for later use
         const jobDesc = {
           id: jobResponse.id,
           title,
@@ -80,7 +76,6 @@ export default function JobDescriptionPage() {
         setJobDescription(jobDesc);
         
       } else {
-        // Use local processing (backend offline)
         setProcessingStep('Extracting skills from description...');
         requiredSkills = await parseJobDescription(description);
         setExtractedSkills(requiredSkills);
@@ -98,10 +93,8 @@ export default function JobDescriptionPage() {
       }
 
       setFilteredResumes(rankedCandidates);
-      
       setProcessingStep('Complete!');
 
-      // Navigate to results
       setTimeout(() => {
         router.push('/results');
       }, 500);
@@ -135,82 +128,138 @@ Requirements:
     setExperience('2+ years');
   };
 
+  const features = [
+    { icon: <Brain className="h-5 w-5" />, title: 'NLP Extraction', desc: 'Extract skills with AI' },
+    { icon: <Target className="h-5 w-5" />, title: 'Semantic Match', desc: 'Deep understanding' },
+    { icon: <Zap className="h-5 w-5" />, title: 'Smart Ranking', desc: 'Weighted scoring' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 transition-colors">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
+      {/* Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/2 w-96 h-96 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-br from-primary-500/10 to-cyan-500/10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="text-center mb-12"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <Briefcase className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Job Description</h1>
-            </div>
-            
-            {/* API Mode Indicator */}
-            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-sm ${
-              useRealApi && isAuthenticated
-                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-            }`}>
-              {useRealApi && isAuthenticated ? (
-                <>
-                  <Cloud className="h-4 w-4" />
-                  <span>AI Matching</span>
-                </>
-              ) : (
-                <>
-                  <HardDrive className="h-4 w-4" />
-                  <span>Offline</span>
-                </>
-              )}
-            </div>
-          </div>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Define the job requirements to match against candidate profiles
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium mb-6"
+          >
+            <Briefcase className="h-4 w-4" />
+            <span>Step 2 of 3</span>
+          </motion.div>
+          
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+            Define <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Requirements</span>
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Enter job details and let AI match candidates to your requirements
           </p>
         </motion.div>
 
-        {resumes.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mb-6"
-          >
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 rounded">
-              <div className="flex items-center">
-                <AlertCircle className="h-5 w-5 text-yellow-400 mr-3" />
-                <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                  No resumes found. Please upload resumes first before proceeding.
+        {/* Status Cards Row */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8"
+        >
+          {/* Resumes Status */}
+          <div className={`rounded-2xl p-4 border ${
+            resumes.length > 0 
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+              : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                resumes.length > 0 
+                  ? 'bg-green-100 dark:bg-green-900/30'
+                  : 'bg-amber-100 dark:bg-amber-900/30'
+              }`}>
+                <FileText className={`h-5 w-5 ${
+                  resumes.length > 0 
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-amber-600 dark:text-amber-400'
+                }`} />
+              </div>
+              <div>
+                <p className={`font-semibold ${
+                  resumes.length > 0 
+                    ? 'text-green-800 dark:text-green-300'
+                    : 'text-amber-800 dark:text-amber-300'
+                }`}>
+                  {resumes.length > 0 ? `${resumes.length} Resume${resumes.length > 1 ? 's' : ''} Ready` : 'No Resumes'}
+                </p>
+                <p className={`text-sm ${
+                  resumes.length > 0 
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-amber-600 dark:text-amber-400'
+                }`}>
+                  {resumes.length > 0 ? 'Ready for screening' : 'Upload resumes first'}
                 </p>
               </div>
             </div>
-          </motion.div>
-        )}
+          </div>
 
-        {resumes.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mb-6"
-          >
-            <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-400 p-4 rounded">
-              <div className="flex items-center">
-                <Zap className="h-5 w-5 text-green-500 mr-3" />
-                <p className="text-sm text-green-700 dark:text-green-400">
-                  <strong>{resumes.length} resume{resumes.length > 1 ? 's' : ''}</strong> ready for screening
+          {/* API Status */}
+          <div className={`rounded-2xl p-4 border ${
+            useRealApi && isAuthenticated
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+              : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                useRealApi && isAuthenticated
+                  ? 'bg-green-100 dark:bg-green-900/30'
+                  : 'bg-gray-100 dark:bg-gray-700'
+              }`}>
+                {useRealApi && isAuthenticated ? (
+                  <Cloud className="h-5 w-5 text-green-600 dark:text-green-400" />
+                ) : (
+                  <HardDrive className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                )}
+              </div>
+              <div>
+                <p className={`font-semibold ${
+                  useRealApi && isAuthenticated
+                    ? 'text-green-800 dark:text-green-300'
+                    : 'text-gray-800 dark:text-gray-300'
+                }`}>
+                  {useRealApi && isAuthenticated ? 'AI Processing' : 'Local Mode'}
+                </p>
+                <p className={`text-sm ${
+                  useRealApi && isAuthenticated
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-600 dark:text-gray-400'
+                }`}>
+                  {useRealApi && isAuthenticated ? 'Sentence-BERT matching' : 'Keyword matching'}
                 </p>
               </div>
             </div>
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
 
-        <Card>
-          <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Main Form Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-800 overflow-hidden"
+        >
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {/* Job Title */}
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="title" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Job Title *
               </label>
               <input
@@ -219,13 +268,14 @@ Requirements:
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Senior Software Engineer"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
                 required
               />
             </div>
 
+            {/* Experience */}
             <div>
-              <label htmlFor="experience" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="experience" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Required Experience
               </label>
               <input
@@ -234,68 +284,73 @@ Requirements:
                 value={experience}
                 onChange={(e) => setExperience(e.target.value)}
                 placeholder="e.g., 3+ years"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
               />
             </div>
 
+            {/* Job Description */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label htmlFor="description" className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
                   Job Description *
                 </label>
-                <button
+                <motion.button
                   type="button"
                   onClick={sampleJD}
-                  className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center space-x-1"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
                 >
                   <Sparkles className="h-4 w-4" />
                   <span>Use Sample</span>
-                </button>
+                </motion.button>
               </div>
               <textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Paste or type the complete job description including responsibilities, requirements, and qualifications..."
-                rows={12}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                rows={10}
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
                 required
               />
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                {useRealApi && isAuthenticated 
-                  ? 'Our AI will extract key skills using NLP and match candidates with Sentence-BERT'
-                  : 'Connect to backend for AI-powered extraction.'
-                }
-              </p>
             </div>
 
             {/* Processing Status */}
             {isProcessing && (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-primary-50 dark:bg-primary-900/20 rounded-lg p-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl p-6 border border-purple-100 dark:border-purple-800"
               >
-                <div className="flex items-center space-x-3">
-                  <div className="h-5 w-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-primary-700 dark:text-primary-400 font-medium">{processingStep}</span>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-purple-800 dark:text-purple-300">{processingStep}</p>
+                    <p className="text-sm text-purple-600 dark:text-purple-400">Please wait...</p>
+                  </div>
                 </div>
               </motion.div>
             )}
 
-            {/* Extracted Skills Preview */}
+            {/* Extracted Skills */}
             {extractedSkills.length > 0 && !isProcessing && (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-6 border border-green-200 dark:border-green-800"
               >
-                <p className="text-sm font-medium text-green-800 dark:text-green-400 mb-2">Extracted Skills:</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <p className="font-semibold text-green-800 dark:text-green-300">Extracted Skills</p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {extractedSkills.map((skill, idx) => (
                     <span
                       key={idx}
-                      className="px-2 py-1 bg-green-100 dark:bg-green-800/50 text-green-700 dark:text-green-300 rounded-md text-sm"
+                      className="px-3 py-1.5 bg-green-100 dark:bg-green-800/50 text-green-700 dark:text-green-300 rounded-lg text-sm font-medium"
                     >
                       {skill}
                     </span>
@@ -304,64 +359,51 @@ Requirements:
               </motion.div>
             )}
 
-            <div className="flex justify-between items-center pt-4">
-              <Button
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+              <motion.button
                 type="button"
-                variant="outline"
                 onClick={() => router.push('/upload-resume')}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full sm:w-auto px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2"
               >
+                <ArrowLeft className="h-5 w-5" />
                 Back to Upload
-              </Button>
-              <Button
+              </motion.button>
+              <motion.button
                 type="submit"
-                size="lg"
-                isLoading={isProcessing}
-                disabled={!title || !description || resumes.length === 0}
+                disabled={!title || !description || resumes.length === 0 || isProcessing}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full sm:w-auto group px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl font-semibold shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isProcessing ? 'Processing...' : 'Analyze Candidates'}
-              </Button>
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </motion.button>
             </div>
           </form>
-        </Card>
+        </motion.div>
 
-        {/* Info Section */}
+        {/* Feature Cards */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="mt-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
         >
-          <Card>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">How it works</h3>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li className="flex items-start">
-                <span className="text-primary-600 dark:text-primary-400 font-bold mr-2">•</span>
-                <span>
-                  {useRealApi && isAuthenticated
-                    ? 'Our spaCy NLP engine extracts key skills, qualifications, and requirements from your job description'
-                    : 'Keywords are extracted from your job description'
-                  }
-                </span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-primary-600 dark:text-primary-400 font-bold mr-2">•</span>
-                <span>
-                  {useRealApi && isAuthenticated
-                    ? 'Sentence-BERT semantic matching compares candidate profiles against job requirements'
-                    : 'Candidates are matched based on keyword overlap'
-                  }
-                </span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-primary-600 dark:text-primary-400 font-bold mr-2">•</span>
-                <span>Candidates are ranked: 70% skills, 20% experience, 10% education</span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-primary-600 dark:text-primary-400 font-bold mr-2">•</span>
-                <span>Results are displayed with detailed scoring breakdown for informed decision-making</span>
-              </li>
-            </ul>
-          </Card>
+          {features.map((feature, index) => (
+            <div
+              key={index}
+              className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 mb-3">
+                {feature.icon}
+              </div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{feature.title}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{feature.desc}</p>
+            </div>
+          ))}
         </motion.div>
       </div>
     </div>

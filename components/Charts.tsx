@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface SkillsChartProps {
   data: { skill: string; count: number }[];
@@ -125,16 +125,49 @@ interface PerformanceTrendProps {
 }
 
 export function PerformanceTrendChart({ data }: PerformanceTrendProps) {
+  // Gradient colors based on score
+  const getBarColor = (score: number) => {
+    if (score >= 75) return '#10b981'; // green
+    if (score >= 60) return '#3b82f6'; // blue
+    if (score >= 45) return '#f59e0b'; // amber
+    return '#ef4444'; // red
+  };
+
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="name" />
-        <YAxis />
-        <Tooltip />
+      <BarChart data={data} barCategoryGap="20%">
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <XAxis 
+          dataKey="name" 
+          tick={{ fill: '#6b7280', fontSize: 12 }}
+          axisLine={{ stroke: '#e5e7eb' }}
+        />
+        <YAxis 
+          domain={[0, 100]}
+          tick={{ fill: '#6b7280', fontSize: 12 }}
+          axisLine={{ stroke: '#e5e7eb' }}
+        />
+        <Tooltip 
+          formatter={(value: number) => [`${value}%`, 'Score']}
+          contentStyle={{ 
+            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+            border: '1px solid #e5e7eb',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        />
         <Legend />
-        <Line type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={2} />
-      </LineChart>
+        <Bar 
+          dataKey="score" 
+          name="Match Score"
+          radius={[8, 8, 0, 0]}
+          fill="#3b82f6"
+        >
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={getBarColor(entry.score)} />
+          ))}
+        </Bar>
+      </BarChart>
     </ResponsiveContainer>
   );
 }

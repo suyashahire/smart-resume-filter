@@ -1,2 +1,2 @@
-# Smart Resume Filter & AI HR Assistant - Backend Application
+# HireQ - Backend Application
 

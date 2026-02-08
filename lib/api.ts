@@ -1,5 +1,5 @@
 /**
- * API Client for Smart Resume Filter & AI HR Assistant
+ * API Client for HireQ
  * 
  * This module handles all communication with the backend API.
  */
@@ -434,5 +434,30 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 export async function healthCheck(): Promise<{ status: string }> {
   return apiRequest('/health');
+}
+
+// ==================== Profile Management ====================
+
+export async function updateProfile(data: { name?: string; email?: string }): Promise<{ message: string }> {
+  return apiRequest('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  return apiRequest('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
+export async function deleteAccount(): Promise<{ message: string }> {
+  return apiRequest('/auth/account', {
+    method: 'DELETE',
+  });
 }
 

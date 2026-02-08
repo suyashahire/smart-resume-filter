@@ -1,4 +1,4 @@
-# Smart Resume Filter & AI HR Assistant - Backend Dependencies
+# HireQ - Backend Dependencies
 # Python 3.10+
 
 # Web Framework

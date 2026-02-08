@@ -1,6 +1,6 @@
-# Smart Resume Filter & AI HR Assistant - Backend
+# HireQ - Backend
 
-AI-powered recruitment platform backend built with FastAPI, MongoDB, and ML/NLP services.
+HireQ backend API built with FastAPI, MongoDB, and ML/NLP services for intelligent recruitment.
 
 ## 🚀 Quick Start
 
@@ -159,7 +159,7 @@ Key environment variables:
 ```env
 # MongoDB
 MONGODB_URI=mongodb://localhost:27017
-DATABASE_NAME=smart_resume_filter
+DATABASE_NAME=hireq
 
 # JWT
 JWT_SECRET_KEY=your-secret-key
@@ -186,5 +186,5 @@ pytest --cov=app tests/
 
 ## 📝 License
 
-MIT License - Group 40, Sinhgad Academy of Engineering
+MIT License - HireQ
 

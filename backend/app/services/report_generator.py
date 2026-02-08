@@ -211,7 +211,7 @@ class ReportGeneratorService:
                 footer_style
             ))
             story.append(Paragraph(
-                "Smart Resume Filter & AI HR Assistant - Group 40, Sinhgad Academy of Engineering", 
+                "HireQ - AI-Powered Recruitment Platform", 
                 footer_style
             ))
             
