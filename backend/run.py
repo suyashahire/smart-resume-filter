@@ -2,6 +2,15 @@
 Run script for the HireQ backend.
 """
 
+import os
+import warnings
+
+# Suppress HuggingFace tokenizer parallelism warning
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Suppress PyTorch deprecation warnings
+warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
+
 import uvicorn
 from app.config import settings
 

@@ -297,3 +297,30 @@ async def get_dashboard_stats(
         ]
     }
 
+
+@router.delete("/cleanup/orphaned-screening-results")
+async def cleanup_orphaned_screening_results(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clean up orphaned screening results.
+    
+    Removes screening results that reference deleted resumes.
+    """
+    # Get all screening results for the user
+    screening_results = await ScreeningResult.find(
+        ScreeningResult.user_id == str(current_user.id)
+    ).to_list()
+    
+    deleted_count = 0
+    for sr in screening_results:
+        # Check if the referenced resume still exists
+        resume = await Resume.get(sr.resume_id)
+        if not resume:
+            await sr.delete()
+            deleted_count += 1
+    
+    return {
+        "message": f"Cleaned up {deleted_count} orphaned screening results",
+        "deleted_count": deleted_count
+    }

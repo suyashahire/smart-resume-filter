@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Video, CheckCircle, TrendingUp, MessageSquare, Cloud, HardDrive, Mic, Brain, ArrowRight, Sparkles, User, BarChart3, FileText, Headphones } from 'lucide-react';
-import FileUpload from '@/components/FileUpload';
+import FileUpload from '@/components/ui/FileUpload';
 import { useStore } from '@/store/useStore';
 import { transcribeInterview, analyzeInterview } from '@/lib/mockApi';
 import * as api from '@/lib/api';

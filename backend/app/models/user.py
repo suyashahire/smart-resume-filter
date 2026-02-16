@@ -14,6 +14,14 @@ class UserRole(str, Enum):
     HR_MANAGER = "hr_manager"
     ADMIN = "admin"
     VIEWER = "viewer"
+    CANDIDATE = "candidate"  # Job applicants
+
+
+class AccountStatus(str, Enum):
+    """Account approval status."""
+    PENDING = "pending"      # Awaiting admin approval (HR only)
+    APPROVED = "approved"    # Active account
+    REJECTED = "rejected"    # Rejected by admin
 
 
 class User(Document):
@@ -24,6 +32,13 @@ class User(Document):
     password_hash: str = Field(...)
     role: UserRole = Field(default=UserRole.HR_MANAGER)
     is_active: bool = Field(default=True)
+    
+    # Account approval (for HR accounts requiring admin approval)
+    account_status: AccountStatus = Field(default=AccountStatus.APPROVED)
+    rejection_reason: Optional[str] = None
+    approved_by: Optional[str] = None  # Admin user ID who approved
+    approved_at: Optional[datetime] = None
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
@@ -32,6 +47,8 @@ class User(Document):
         name = "users"
         indexes = [
             "email",
+            "role",
+            "account_status",
         ]
     
     class Config:
@@ -39,7 +56,8 @@ class User(Document):
             "example": {
                 "name": "HR Manager",
                 "email": "hr@company.com",
-                "role": "hr_manager"
+                "role": "hr_manager",
+                "account_status": "approved"
             }
         }
 
@@ -67,6 +85,8 @@ class UserResponse(BaseModel):
     email: EmailStr
     role: UserRole
     is_active: bool
+    account_status: AccountStatus = AccountStatus.APPROVED
+    rejection_reason: Optional[str] = None
     created_at: datetime
     last_login: Optional[datetime]
     
@@ -93,4 +113,32 @@ class TokenData(BaseModel):
     """Token payload data."""
     user_id: Optional[str] = None
     email: Optional[str] = None
+
+
+# Admin schemas for user management
+
+class UserListResponse(BaseModel):
+    """Response for listing users (admin)."""
+    id: str
+    name: str
+    email: EmailStr
+    role: UserRole
+    is_active: bool
+    account_status: AccountStatus
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+    last_login: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+
+class ApproveUserRequest(BaseModel):
+    """Request to approve a user."""
+    pass  # No additional data needed
+
+
+class RejectUserRequest(BaseModel):
+    """Request to reject a user."""
+    reason: str = Field(..., min_length=1, max_length=500)
 

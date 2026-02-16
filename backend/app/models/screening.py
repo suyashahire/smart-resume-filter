@@ -57,6 +57,18 @@ class ScreeningResult(Document):
     # Final combined score (with interview)
     final_score: Optional[float] = None
     
+    # Candidate feedback (visible to candidates)
+    candidate_feedback: Optional[str] = None
+    feedback_sent_at: Optional[datetime] = None
+    score_visible_to_candidate: bool = True  # HR can hide score from candidate
+    
+    # Internal HR notes (not visible to candidates)
+    internal_notes: Optional[str] = None
+    
+    # Application status tracking
+    application_status: str = "screening"  # applied, screening, interview, offer, rejected, hired, withdrawn
+    status_updated_at: Optional[datetime] = None
+    
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -68,6 +80,7 @@ class ScreeningResult(Document):
             "resume_id",
             "overall_score",
             "created_at",
+            "application_status",
         ]
 
 

@@ -9,30 +9,34 @@ import {
   ArrowRight, Sparkles, CheckCircle2, Play, ChevronRight,
   Upload, Search, TrendingUp, Award
 } from 'lucide-react';
-import Button from '@/components/Button';
+import Button from '@/components/ui/Button';
 import { useStore } from '@/store/useStore';
+
+// Animated counter hook - must be defined outside component
+function useCounter(end: number, duration: number = 2000) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let startTime: number;
+    let animationId: number;
+    const animate = (currentTime: number) => {
+      if (!startTime) startTime = currentTime;
+      const progress = Math.min((currentTime - startTime) / duration, 1);
+      setCount(Math.floor(progress * end));
+      if (progress < 1) {
+        animationId = requestAnimationFrame(animate);
+      }
+    };
+    animationId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationId);
+  }, [end, duration]);
+  return count;
+}
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated } = useStore();
   const { scrollYProgress } = useScroll();
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '50%']);
-
-  // Animated counter hook
-  const useCounter = (end: number, duration: number = 2000) => {
-    const [count, setCount] = useState(0);
-    useEffect(() => {
-      let startTime: number;
-      const animate = (currentTime: number) => {
-        if (!startTime) startTime = currentTime;
-        const progress = Math.min((currentTime - startTime) / duration, 1);
-        setCount(Math.floor(progress * end));
-        if (progress < 1) requestAnimationFrame(animate);
-      };
-      requestAnimationFrame(animate);
-    }, [end, duration]);
-    return count;
-  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -409,7 +413,7 @@ export default function Home() {
                     </svg>
                   ))}
                 </div>
-                <p className="text-gray-700 dark:text-gray-300 mb-6 text-lg leading-relaxed">"{testimonial.quote}"</p>
+                <p className="text-gray-700 dark:text-gray-300 mb-6 text-lg leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-purple-500 flex items-center justify-center text-white font-bold">
                     {testimonial.name.charAt(0)}

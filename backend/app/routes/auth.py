@@ -5,14 +5,14 @@ Authentication routes for user registration, login, and management.
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Callable
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import settings
 from app.models.user import (
     User, UserCreate, UserLogin, UserResponse, 
-    UserUpdate, Token, TokenData
+    UserUpdate, Token, TokenData, UserRole, AccountStatus
 )
 
 router = APIRouter()
@@ -83,6 +83,33 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     return user
 
 
+# ==================== Role-Based Access Control ====================
+
+def require_role(*allowed_roles: UserRole) -> Callable:
+    """Create a dependency that requires specific user roles.
+    
+    Usage:
+        @router.get("/admin-only")
+        async def admin_endpoint(user: User = Depends(require_role(UserRole.ADMIN))):
+            ...
+    """
+    async def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions for this action"
+            )
+        return current_user
+    return role_checker
+
+
+# Convenience dependencies for common role checks
+require_hr = require_role(UserRole.HR_MANAGER, UserRole.ADMIN)
+require_candidate = require_role(UserRole.CANDIDATE)
+require_admin = require_role(UserRole.ADMIN)
+require_hr_or_admin = require_role(UserRole.HR_MANAGER, UserRole.ADMIN)
+
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate):
     """
@@ -91,7 +118,12 @@ async def register(user_data: UserCreate):
     - **name**: User's full name
     - **email**: User's email address (must be unique)
     - **password**: Password (minimum 6 characters)
-    - **role**: User role (hr_manager, admin, viewer)
+    - **role**: User role (hr_manager, admin, viewer, candidate)
+    
+    Registration behavior:
+    - Candidates: Immediately active (account_status=approved)
+    - HR Managers: Pending admin approval (account_status=pending, is_active=false)
+    - Admins: Can only be created by existing admins
     """
     # Check if user already exists
     existing_user = await User.find_one(User.email == user_data.email)
@@ -102,19 +134,54 @@ async def register(user_data: UserCreate):
             detail="Email already registered"
         )
     
-    # Create new user
+    # Prevent self-registration as admin
+    if user_data.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin accounts can only be created by existing administrators"
+        )
+    
+    # Create new user with role-based account status
     hashed_password = get_password_hash(user_data.password)
+    
+    # Candidates are immediately active, HR needs admin approval
+    if user_data.role == UserRole.CANDIDATE:
+        account_status = AccountStatus.APPROVED
+        is_active = True
+    else:
+        # HR_MANAGER and VIEWER need admin approval
+        account_status = AccountStatus.PENDING
+        is_active = False
     
     user = User(
         name=user_data.name,
         email=user_data.email,
         password_hash=hashed_password,
-        role=user_data.role
+        role=user_data.role,
+        account_status=account_status,
+        is_active=is_active
     )
     
     await user.insert()
     
-    # Create access token
+    # For pending accounts, don't return a token
+    if account_status == AccountStatus.PENDING:
+        # Return a special response indicating pending status
+        return Token(
+            access_token="",  # No token for pending accounts
+            user=UserResponse(
+                id=str(user.id),
+                name=user.name,
+                email=user.email,
+                role=user.role,
+                is_active=user.is_active,
+                account_status=user.account_status,
+                created_at=user.created_at,
+                last_login=user.last_login
+            )
+        )
+    
+    # Create access token for active accounts
     access_token = create_access_token(data={"sub": str(user.id)})
     
     return Token(
@@ -125,6 +192,7 @@ async def register(user_data: UserCreate):
             email=user.email,
             role=user.role,
             is_active=user.is_active,
+            account_status=user.account_status,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -148,6 +216,20 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Check account status
+    if user.account_status == AccountStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending admin approval. You'll receive an email once approved."
+        )
+    
+    if user.account_status == AccountStatus.REJECTED:
+        reason = user.rejection_reason or "No reason provided"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Your account was rejected: {reason}"
+        )
+    
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -169,6 +251,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             email=user.email,
             role=user.role,
             is_active=user.is_active,
+            account_status=user.account_status,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -191,6 +274,20 @@ async def login_json(login_data: UserLogin):
             detail="Incorrect email or password"
         )
     
+    # Check account status
+    if user.account_status == AccountStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending admin approval. You'll receive an email once approved."
+        )
+    
+    if user.account_status == AccountStatus.REJECTED:
+        reason = user.rejection_reason or "No reason provided"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Your account was rejected: {reason}"
+        )
+    
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -212,6 +309,7 @@ async def login_json(login_data: UserLogin):
             email=user.email,
             role=user.role,
             is_active=user.is_active,
+            account_status=user.account_status,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -227,6 +325,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         email=current_user.email,
         role=current_user.role,
         is_active=current_user.is_active,
+        account_status=current_user.account_status,
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )
@@ -260,6 +359,7 @@ async def update_current_user(
         email=current_user.email,
         role=current_user.role,
         is_active=current_user.is_active,
+        account_status=current_user.account_status,
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )

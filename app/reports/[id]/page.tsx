@@ -8,10 +8,10 @@ import {
   User, Mail, Phone, GraduationCap, Briefcase, 
   TrendingUp, MessageSquare, Award, Download, 
   AlertCircle, ArrowLeft, CheckCircle, XCircle,
-  Cloud, HardDrive, Loader2
+  Cloud, HardDrive, Loader2, FileText, Eye
 } from 'lucide-react';
-import Card from '@/components/Card';
-import Button from '@/components/Button';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
 import { useStore } from '@/store/useStore';
 import * as api from '@/lib/api';
 
@@ -19,6 +19,7 @@ export default function CandidateReportPage({ params }: { params: { id: string }
   const router = useRouter();
   const { filteredResumes, interviews, jobDescription, getInterviewByCandidate, useRealApi, isAuthenticated } = useStore();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isViewingResume, setIsViewingResume] = useState(false);
 
   const candidate = useMemo(() => {
     return filteredResumes.find(r => r.id === params.id);
@@ -69,6 +70,36 @@ export default function CandidateReportPage({ params }: { params: { id: string }
       alert('Failed to download PDF report');
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleViewResume = async () => {
+    if (!useRealApi || !isAuthenticated) {
+      alert('Viewing resume requires backend connection. Please enable "Use Real API" in settings and ensure the server is running.');
+      return;
+    }
+    
+    setIsViewingResume(true);
+    try {
+      const blob = await api.downloadResume(params.id);
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create a hidden link and click it - more reliable than window.open
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('Failed to view resume:', error);
+      alert(`Failed to load resume: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsViewingResume(false);
     }
   };
 
@@ -151,14 +182,29 @@ export default function CandidateReportPage({ params }: { params: { id: string }
                 )}
               </div>
             </div>
-            <Button variant="outline" onClick={handleDownloadPdf} disabled={isDownloading}>
-              {isDownloading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              Export PDF
-            </Button>
+            <div className="flex items-center space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={handleViewResume} 
+                disabled={isViewingResume || (!useRealApi || !isAuthenticated)}
+                title={!useRealApi || !isAuthenticated ? 'Requires backend connection (Live mode)' : 'View original resume'}
+              >
+                {isViewingResume ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4 mr-2" />
+                )}
+                View Resume
+              </Button>
+              <Button variant="outline" onClick={handleDownloadPdf} disabled={isDownloading}>
+                {isDownloading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Export PDF
+              </Button>
+            </div>
           </div>
         </motion.div>
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Brain, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, User, ArrowRight, Shield, Zap, BarChart3 } from 'lucide-react';
+import { Brain, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, User, ArrowRight, Shield, Zap, BarChart3, Clock } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import * as api from '@/lib/api';
 
@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
 
   useEffect(() => {
     checkBackendStatus();
@@ -40,29 +41,48 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsPendingApproval(false);
     setIsLoading(true);
 
     try {
       if (backendStatus === 'online') {
         if (isRegistering) {
-          const response = await api.register({ name, email, password });
+          const response = await api.register(name, email, password, 'hr_manager');
+          
+          // Check if account is pending approval
+          if (!response.access_token || response.user.account_status === 'pending') {
+            setIsPendingApproval(true);
+            setIsLoading(false);
+            return;
+          }
+          
           setAuthToken(response.access_token);
           setUser({
             id: response.user.id,
             name: response.user.name,
             email: response.user.email,
-            role: response.user.role
+            role: response.user.role,
+            account_status: response.user.account_status
           });
           setIsAuthenticated(true);
           router.push('/dashboard');
         } else {
-          const response = await api.login({ email, password });
+          const response = await api.login(email, password);
+          
+          // Check if user is a candidate (should use candidate portal)
+          if (response.user.role === 'candidate') {
+            setError('This portal is for recruiters only. Please use the Candidate Portal.');
+            setIsLoading(false);
+            return;
+          }
+          
           setAuthToken(response.access_token);
           setUser({
             id: response.user.id,
             name: response.user.name,
             email: response.user.email,
-            role: response.user.role
+            role: response.user.role,
+            account_status: response.user.account_status
           });
           setIsAuthenticated(true);
           router.push('/dashboard');
@@ -71,7 +91,13 @@ export default function LoginPage() {
         throw new Error('Backend server is offline. Please try again later.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+      // Check if it's a pending approval error
+      if (errorMessage.toLowerCase().includes('pending')) {
+        setIsPendingApproval(true);
+      } else {
+        setError(errorMessage);
+      }
       setIsLoading(false);
     }
   };
@@ -232,7 +258,37 @@ export default function LoginPage() {
             </p>
           </motion.div>
 
+          {/* Pending Approval Message */}
+          {isPendingApproval && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-800 p-8 text-center"
+            >
+              <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Account Pending Approval
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Your recruiter account is being reviewed by an administrator.
+                You&apos;ll receive an email once your account is approved.
+              </p>
+              <button
+                onClick={() => {
+                  setIsPendingApproval(false);
+                  setIsRegistering(false);
+                }}
+                className="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium"
+              >
+                Back to Sign In
+              </button>
+            </motion.div>
+          )}
+
           {/* Form Card */}
+          {!isPendingApproval && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -394,6 +450,26 @@ export default function LoginPage() {
               >
                 {isRegistering ? 'Sign In' : 'Create one'}
               </button>
+            </p>
+          </motion.div>
+          )}
+
+          {/* Candidate Portal Link */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-6 p-4 bg-gradient-to-r from-candidate-50 to-cyan-50 dark:from-candidate-900/20 dark:to-cyan-900/20 border border-candidate-200 dark:border-candidate-800 rounded-2xl"
+          >
+            <p className="text-center text-gray-700 dark:text-gray-300 text-sm">
+              Looking for a job?{' '}
+              <Link
+                href="/candidate/login"
+                className="font-semibold text-candidate-600 hover:text-candidate-700 dark:text-candidate-400 dark:hover:text-candidate-300 transition-colors inline-flex items-center gap-1"
+              >
+                Go to Candidate Portal
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </p>
           </motion.div>
 

@@ -17,13 +17,14 @@ from app.models.interview import (
 )
 from app.models.screening import ScreeningResult
 from app.routes.auth import get_current_user
-from app.services.transcription import TranscriptionService
+from app.services.transcription import get_transcription_service
 from app.services.sentiment import get_sentiment_service
+from app.services.websocket_manager import get_connection_manager, EventType
 
 router = APIRouter()
 
 # Use singleton instances for model reuse (pre-loaded at startup)
-transcription_service = TranscriptionService()
+transcription_service = get_transcription_service()
 sentiment_service = get_sentiment_service()
 
 
@@ -248,6 +249,20 @@ async def analyze_interview(
         )
     
     await interview.save()
+    
+    # Broadcast interview analyzed event
+    ws_manager = get_connection_manager()
+    await ws_manager.broadcast_event(
+        EventType.INTERVIEW_ANALYZED,
+        {
+            "id": str(interview.id),
+            "resume_id": interview.resume_id,
+            "sentiment_score": interview.analysis.sentiment_score if interview.analysis else None,
+            "confidence_score": interview.analysis.confidence_score if interview.analysis else None,
+            "is_analyzed": interview.is_analyzed
+        },
+        user_id=str(current_user.id)
+    )
     
     return InterviewAnalysisResponse(
         id=str(interview.id),

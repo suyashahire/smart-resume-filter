@@ -158,7 +158,7 @@ export async function generateReport(
 export async function login(email: string, password: string) {
   if (USE_REAL_API) {
     try {
-      const response = await realApi.login({ email, password });
+      const response = await realApi.login(email, password);
       return {
         success: true,
         user: response.user,
@@ -205,6 +205,22 @@ export async function getDashboardStats() {
     skills_distribution: [],
     score_distribution: [],
   };
+}
+
+/**
+ * Cleanup orphaned screening results (from deleted resumes)
+ */
+export async function cleanupOrphanedScreeningResults() {
+  if (USE_REAL_API) {
+    try {
+      return await realApi.cleanupOrphanedScreeningResults();
+    } catch (error) {
+      console.error('Cleanup failed:', error);
+      throw error;
+    }
+  }
+  
+  return { message: 'Cleanup not needed in mock mode', deleted_count: 0 };
 }
 
 /**

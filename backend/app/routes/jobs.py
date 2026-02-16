@@ -17,6 +17,7 @@ from app.models.screening import ScreeningResult, ScreeningResultResponse, Scree
 from app.routes.auth import get_current_user
 from app.services.job_parser import JobParserService
 from app.services.matching import get_matching_service
+from app.services.websocket_manager import get_connection_manager, EventType
 
 router = APIRouter()
 
@@ -37,6 +38,7 @@ async def create_job_description(
     """
     # Extract skills from description
     extracted_skills = await job_parser.extract_skills(job_data.description)
+    extracted_skills = await job_parser.extract_skills(job_data.description)
     
     # Create job description
     job = JobDescription(
@@ -52,6 +54,19 @@ async def create_job_description(
     )
     
     await job.insert()
+    
+    # Broadcast job created event
+    ws_manager = get_connection_manager()
+    await ws_manager.broadcast_event(
+        EventType.JOB_CREATED,
+        {
+            "id": str(job.id),
+            "title": job.title,
+            "required_skills": job.required_skills,
+            "location": job.location
+        },
+        user_id=str(current_user.id)
+    )
     
     return JobDescriptionResponse(
         id=str(job.id),
@@ -221,6 +236,17 @@ async def delete_job_description(
     # Delete associated screening results
     await ScreeningResult.find(ScreeningResult.job_id == job_id).delete()
     
+    # Broadcast job deleted event
+    ws_manager = get_connection_manager()
+    await ws_manager.broadcast_event(
+        EventType.JOB_DELETED,
+        {
+            "id": job_id,
+            "title": job.title
+        },
+        user_id=str(current_user.id)
+    )
+    
     await job.delete()
     
     return None
@@ -258,7 +284,8 @@ async def screen_candidates(
         )
     
     # Get resumes to screen
-    if screening_request and screening_request.resume_ids:
+    if screening_request and screening_request.resume_ids and len(screening_request.resume_ids) > 0:
+        # Screen only specified resumes
         resumes = []
         for resume_id in screening_request.resume_ids:
             resume = await Resume.get(resume_id)
@@ -281,24 +308,58 @@ async def screen_candidates(
     results = await matching_service.match_candidates(resumes, job)
     
     # Store screening results and update job
+    # Check for existing results to avoid duplicates
     for result in results:
-        screening_result = ScreeningResult(
-            user_id=str(current_user.id),
-            job_id=str(job.id),
-            resume_id=result["resume_id"],
-            overall_score=result["score"],
-            score_breakdown=result["score_breakdown"],
-            skill_matches=result["skill_matches"],
-            matched_skills_count=result["matched_skills_count"],
-            total_required_skills=len(job.required_skills),
-            recommendation=result["recommendation"]
+        # Check if a screening result already exists for this job/resume combination
+        existing_result = await ScreeningResult.find_one(
+            ScreeningResult.job_id == str(job.id),
+            ScreeningResult.resume_id == result["resume_id"]
         )
-        await screening_result.insert()
+        
+        if existing_result:
+            # Update existing result
+            existing_result.overall_score = result["score"]
+            existing_result.score_breakdown = result["score_breakdown"]
+            existing_result.skill_matches = result["skill_matches"]
+            existing_result.matched_skills_count = result["matched_skills_count"]
+            existing_result.total_required_skills = len(job.required_skills)
+            existing_result.recommendation = result["recommendation"]
+            await existing_result.save()
+        else:
+            # Create new result
+            screening_result = ScreeningResult(
+                user_id=str(current_user.id),
+                job_id=str(job.id),
+                resume_id=result["resume_id"],
+                overall_score=result["score"],
+                score_breakdown=result["score_breakdown"],
+                skill_matches=result["skill_matches"],
+                matched_skills_count=result["matched_skills_count"],
+                total_required_skills=len(job.required_skills),
+                recommendation=result["recommendation"]
+            )
+            await screening_result.insert()
     
     # Update job stats
     job.candidates_screened = len(results)
     job.updated_at = datetime.utcnow()
     await job.save()
+    
+    # Broadcast screening completed event
+    ws_manager = get_connection_manager()
+    for result in results:
+        await ws_manager.broadcast_event(
+            EventType.CANDIDATE_SCORED,
+            {
+                "job_id": str(job.id),
+                "job_title": job.title,
+                "resume_id": result["resume_id"],
+                "candidate_name": result["name"],
+                "score": result["score"],
+                "recommendation": result["recommendation"]
+            },
+            user_id=str(current_user.id)
+        )
     
     # Return ranked candidates
     return [

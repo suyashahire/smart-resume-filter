@@ -2,37 +2,129 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import CalendarModal from '@/components/Calendar/CalendarModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import ThemeToggle from './ThemeToggle';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useStore } from '@/store/useStore';
 import * as api from '@/lib/api';
+import { useRealtimeUpdates, useRealtimeNotifications, RealtimeEvent, RealtimeEventType } from '@/hooks/useRealtimeUpdates';
+
+// Event icons and colors for notifications
+const eventIcons: Record<RealtimeEventType, React.ReactNode> = {
+  resume_uploaded: <FileText className="h-3.5 w-3.5" />,
+  resume_parsed: <FileText className="h-3.5 w-3.5" />,
+  candidate_scored: <Target className="h-3.5 w-3.5" />,
+  pipeline_status_changed: <Target className="h-3.5 w-3.5" />,
+  interview_analyzed: <MessageSquare className="h-3.5 w-3.5" />,
+  report_generated: <FileText className="h-3.5 w-3.5" />,
+  job_created: <Briefcase className="h-3.5 w-3.5" />,
+  job_deleted: <Trash2 className="h-3.5 w-3.5" />,
+  connection_established: <Wifi className="h-3.5 w-3.5" />,
+};
+
+const eventColors: Record<RealtimeEventType, string> = {
+  resume_uploaded: 'bg-blue-500',
+  resume_parsed: 'bg-blue-500',
+  candidate_scored: 'bg-emerald-500',
+  pipeline_status_changed: 'bg-purple-500',
+  interview_analyzed: 'bg-amber-500',
+  report_generated: 'bg-indigo-500',
+  job_created: 'bg-teal-500',
+  job_deleted: 'bg-red-500',
+  connection_established: 'bg-gray-500',
+};
+
+function formatTimestamp(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  return date.toLocaleTimeString();
+}
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const { user, isAuthenticated, logout, useRealApi } = useStore();
-
-  // Handle scroll effect
+  
+  // Realtime notifications
+  const [authToken, setAuthToken] = useState<string | undefined>(undefined);
+  const { notifications, addNotification, dismissNotification, clearNotifications } = useRealtimeNotifications();
+  
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token');
+      setAuthToken(token || undefined);
+    }
+  }, []);
+  
+  const handleEvent = useCallback((event: RealtimeEvent) => {
+    if (event.type !== 'connection_established') {
+      addNotification(event);
+    }
+  }, [addNotification]);
+  
+  const { isConnected } = useRealtimeUpdates({
+    onEvent: handleEvent,
+    token: authToken,
+    enabled: isAuthenticated
+  });
+
+  // Handle scroll effect with throttling
+  useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 20);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const navItems = [
+  // Base nav items for all users
+  const baseNavItems = [
     { name: 'Home', path: '/' },
     { name: 'Upload', path: '/upload-resume' },
-    { name: 'Job Description', path: '/job-description' },
+    { name: 'Jobs', path: '/jobs' },
     { name: 'Results', path: '/results' },
     { name: 'Interviews', path: '/interview-analyzer' },
     { name: 'Dashboard', path: '/dashboard' },
   ];
+
+  // Add role-specific items
+  const getNavItems = () => {
+    let items = [...baseNavItems];
+    
+    // Add Messages for HR users
+    if (user?.role === 'hr_manager' || user?.role === 'admin') {
+      items.push({ name: 'Messages', path: '/messages' });
+    }
+    
+    // Add Admin for admin users
+    if (user?.role === 'admin') {
+      items.push({ name: 'Admin', path: '/admin' });
+    }
+    
+    return items;
+  };
+
+  const navItems = getNavItems();
 
   const handleLogout = async () => {
     if (useRealApi) {
@@ -104,6 +196,124 @@ export default function Navbar() {
 
             {/* Right Section */}
             <div className="flex items-center gap-2">
+              {/* Calendar - only show when authenticated */}
+              {isAuthenticated && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowCalendar(true)}
+                  className="relative p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Calendar className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                </motion.button>
+              )}
+
+              {/* Notification Bell - only show when authenticated */}
+              {isAuthenticated && (
+                <div className="relative">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowNotificationPanel(!showNotificationPanel)}
+                    className="relative p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                    {notifications.length > 0 && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold"
+                      >
+                        {notifications.length > 9 ? '9+' : notifications.length}
+                      </motion.span>
+                    )}
+                    {/* Connection status dot */}
+                    <span className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  </motion.button>
+
+                  {/* Notification Dropdown Panel */}
+                  <AnimatePresence>
+                    {showNotificationPanel && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-full mt-2 w-80 max-h-[400px] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+                      >
+                        {/* Header */}
+                        <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20">
+                          <div className="flex items-center gap-2">
+                            <Bell className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                            <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Notifications</h3>
+                            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {notifications.length > 0 && (
+                              <button
+                                onClick={clearNotifications}
+                                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                              >
+                                Clear
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setShowNotificationPanel(false)}
+                              className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                            >
+                              <X className="h-4 w-4 text-gray-500" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Notifications List */}
+                        <div className="max-h-[320px] overflow-y-auto">
+                          {notifications.length === 0 ? (
+                            <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                              <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                              <p className="text-sm">No notifications</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {isConnected ? 'Live updates enabled' : 'Connecting...'}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                              {notifications.map((notification) => (
+                                <motion.div
+                                  key={notification.id}
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className={`p-1.5 rounded-lg ${eventColors[notification.type]} text-white`}>
+                                      {eventIcons[notification.type]}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm text-gray-900 dark:text-white">
+                                        {notification.message}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {formatTimestamp(notification.timestamp)}
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => dismissNotification(notification.id)}
+                                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                                    >
+                                      <X className="h-3 w-3 text-gray-400" />
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
               {/* Theme Toggle */}
               <ThemeToggle />
 
@@ -318,6 +528,13 @@ export default function Navbar() {
 
       {/* Spacer for fixed navbar */}
       <div className="h-20" />
+
+      {/* Calendar Modal */}
+      <CalendarModal
+        isOpen={showCalendar}
+        onClose={() => setShowCalendar(false)}
+        variant="hr"
+      />
     </>
   );
 }

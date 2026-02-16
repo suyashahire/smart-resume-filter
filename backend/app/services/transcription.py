@@ -1,5 +1,7 @@
 """
-Transcription Service - Speech-to-Text using OpenAI Whisper API.
+Transcription Service - Speech-to-Text using Local Whisper (free, no API key needed).
+
+Uses OpenAI's open-source Whisper model running locally on the server.
 """
 
 import os
@@ -9,28 +11,46 @@ from typing import Optional
 from app.config import settings
 
 
+# Singleton instance for model caching
+_transcription_service_instance: Optional["TranscriptionService"] = None
+
+
+def get_transcription_service() -> "TranscriptionService":
+    """Get singleton instance of TranscriptionService for model reuse."""
+    global _transcription_service_instance
+    if _transcription_service_instance is None:
+        _transcription_service_instance = TranscriptionService()
+    return _transcription_service_instance
+
+
 class TranscriptionService:
-    """Service for transcribing audio/video files to text."""
+    """Service for transcribing audio/video files to text using local Whisper."""
     
     def __init__(self):
-        self.client = None
+        self.model = None
         self._initialized = False
+        self._model_name = getattr(settings, 'WHISPER_MODEL', 'base')
     
     async def _initialize(self):
-        """Initialize OpenAI client."""
+        """Lazy initialization of Whisper model."""
         if not self._initialized:
-            if settings.OPENAI_API_KEY:
+            def load_model():
                 try:
-                    from openai import OpenAI
-                    self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                    import whisper
+                    print(f"Loading Whisper model: {self._model_name}...")
+                    model = whisper.load_model(self._model_name)
+                    print(f"Whisper model '{self._model_name}' loaded successfully")
+                    return model
                 except Exception as e:
-                    print(f"Warning: Could not initialize OpenAI client: {e}")
+                    print(f"Warning: Could not load Whisper model: {e}")
+                    return None
             
+            self.model = await asyncio.get_event_loop().run_in_executor(None, load_model)
             self._initialized = True
     
     async def transcribe(self, file_path: str) -> str:
         """
-        Transcribe an audio/video file to text.
+        Transcribe an audio/video file to text using local Whisper.
         
         Args:
             file_path: Path to the audio/video file
@@ -43,82 +63,48 @@ class TranscriptionService:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Audio file not found: {file_path}")
         
-        # Try OpenAI Whisper API first
-        if self.client:
+        if self.model:
             try:
-                return await self._transcribe_with_whisper(file_path)
+                return await self._transcribe_with_local_whisper(file_path)
             except Exception as e:
-                print(f"Whisper API failed: {e}, falling back to local")
-        
-        # Fallback to local transcription (mock for now)
-        return await self._transcribe_local(file_path)
+                print(f"Local Whisper transcription failed: {e}")
+                raise
+        else:
+            raise RuntimeError("Whisper model not loaded. Please ensure 'openai-whisper' is installed.")
     
-    async def _transcribe_with_whisper(self, file_path: str) -> str:
-        """Transcribe using OpenAI Whisper API."""
+    async def _transcribe_with_local_whisper(self, file_path: str) -> str:
+        """Transcribe using local Whisper model."""
         def transcribe():
-            with open(file_path, "rb") as audio_file:
-                transcript = self.client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="text"
-                )
-            return transcript
+            # Transcribe the audio file
+            result = self.model.transcribe(
+                file_path,
+                language="en",  # Can be set to None for auto-detection
+                fp16=False  # Use FP32 for CPU compatibility
+            )
+            return result["text"].strip()
         
         return await asyncio.get_event_loop().run_in_executor(None, transcribe)
-    
-    async def _transcribe_local(self, file_path: str) -> str:
-        """
-        Local transcription fallback.
-        
-        In production, this could use:
-        - Local Whisper model
-        - Google Speech-to-Text
-        - AWS Transcribe
-        - Azure Speech Services
-        """
-        # For demo purposes, return a sample transcript
-        # In production, implement actual local transcription
-        
-        sample_transcripts = [
-            """I have extensive experience in software development, particularly with Python and JavaScript. 
-            During my time at my previous company, I led a team of five developers and successfully delivered 
-            multiple projects on time. I'm passionate about clean code and best practices. I believe my 
-            skills in React and Node.js would be valuable for this position. I'm excited about the 
-            opportunity to contribute to your team and grow with the company.""",
-            
-            """Thank you for this opportunity. I've been working in the tech industry for about three years now. 
-            My main expertise is in full-stack development, and I've worked extensively with modern frameworks 
-            like React and Django. I'm a quick learner and I enjoy tackling challenging problems. 
-            I'm confident that my experience and enthusiasm would make me a great fit for this role.""",
-            
-            """I'm really excited about this position. My background includes working on several large-scale 
-            applications using microservices architecture. I have strong problem-solving skills and I enjoy 
-            collaborating with cross-functional teams. I'm particularly interested in your company's focus 
-            on innovation and would love to contribute to your projects.""",
-            
-            """My journey in software development started during my college years. Since then, I've had the 
-            opportunity to work on various projects ranging from web applications to data analysis tools. 
-            I'm proficient in multiple programming languages and I always strive to stay updated with 
-            the latest technologies. I believe continuous learning is key to success in this field.""",
-            
-            """I appreciate you taking the time to interview me today. Throughout my career, I've focused on 
-            delivering high-quality solutions and maintaining excellent communication with stakeholders. 
-            I have experience with agile methodologies and I understand the importance of meeting deadlines 
-            while ensuring code quality. I'm looking forward to potentially joining your team."""
-        ]
-        
-        # Return a random transcript for demo
-        import random
-        return random.choice(sample_transcripts)
     
     async def get_audio_duration(self, file_path: str) -> Optional[float]:
         """Get the duration of an audio file in seconds."""
         try:
             def get_duration():
-                from mutagen import File as MutagenFile
-                audio = MutagenFile(file_path)
-                if audio is not None:
-                    return audio.info.length
+                try:
+                    from mutagen import File as MutagenFile
+                    audio = MutagenFile(file_path)
+                    if audio is not None:
+                        return audio.info.length
+                except ImportError:
+                    pass
+                
+                # Fallback using whisper's audio loading
+                try:
+                    import whisper
+                    audio = whisper.load_audio(file_path)
+                    return len(audio) / 16000  # Whisper uses 16kHz sample rate
+                except Exception:
+                    pass
+                
                 return None
             
             return await asyncio.get_event_loop().run_in_executor(None, get_duration)

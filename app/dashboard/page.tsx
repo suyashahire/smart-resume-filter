@@ -1,60 +1,151 @@
 'use client';
 
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Users, FileText, MessageSquare, TrendingUp, Award, Calendar, Cloud, HardDrive, RefreshCw, BarChart3, Sparkles, ArrowRight, Crown } from 'lucide-react';
-import { SkillsDistributionChart, ScoreDistributionChart, PerformanceTrendChart } from '@/components/Charts';
+import { Users, FileText, MessageSquare, TrendingUp, Award, Calendar, Cloud, HardDrive, RefreshCw, BarChart3, Sparkles, ArrowRight, Crown, Briefcase, Clock, Timer, CheckCircle2 } from 'lucide-react';
+import { SkillsDistributionChart, ScoreDistributionChart, PerformanceTrendChart } from '@/components/features/Charts';
 import { useStore } from '@/store/useStore';
 import * as api from '@/lib/api';
+import RealtimeIndicator from '@/components/features/RealtimeIndicator';
 
 export default function DashboardPage() {
-  const { resumes, filteredResumes, interviews, jobDescription, useRealApi, isAuthenticated } = useStore();
+  const { resumes, filteredResumes, interviews, jobDescription, useRealApi, isAuthenticated, setResumes, setFilteredResumes, jobs, candidateJobAssignments, hasFetchedSessionData, setHasFetchedSessionData } = useStore();
   const [apiStats, setApiStats] = useState<api.DashboardStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Fetch API stats when connected
-  useEffect(() => {
-    if (useRealApi && isAuthenticated) {
-      fetchApiStats();
+  // Fetch screening results from all jobs (with proper scores)
+  const fetchScreeningResultsFromApi = useCallback(async () => {
+    setIsLoadingResumes(true);
+    try {
+      // Fetch all jobs first
+      const jobsData = await api.getJobDescriptions();
+      
+      if (jobsData && jobsData.length > 0) {
+        const allScreenedResumes: any[] = [];
+        const allResumes: any[] = [];
+        
+        // Fetch screening results for each job
+        for (const job of jobsData) {
+          try {
+            const screeningResults = await api.getScreeningResults(job.id);
+            if (screeningResults && screeningResults.length > 0) {
+              const resultsWithJob = screeningResults.map((r: any) => ({
+                id: r.id,
+                name: r.name || 'Unknown',
+                email: r.email || '',
+                phone: r.phone || '',
+                skills: r.skills || [],
+                education: r.education || '',
+                experience: r.experience || '',
+                score: r.score || 0,
+                skillMatches: r.skill_matches || [],
+                jobId: job.id
+              }));
+              allScreenedResumes.push(...resultsWithJob);
+            }
+          } catch (err) {
+            // Job may not have screening results yet
+          }
+        }
+        
+        // Also fetch all resumes for total count
+        const resumesData = await api.getResumes();
+        if (resumesData && resumesData.length > 0) {
+          const mappedResumes = resumesData.map((r: any) => ({
+            id: r.id,
+            name: r.parsed_data?.name || 'Unknown',
+            email: r.parsed_data?.email || '',
+            phone: r.parsed_data?.phone || '',
+            skills: r.parsed_data?.skills || [],
+            education: r.parsed_data?.education || '',
+            experience: r.parsed_data?.experience || '',
+            score: 0,
+            skillMatches: []
+          }));
+          allResumes.push(...mappedResumes);
+        }
+        
+        // Merge: use screened resume data if available, otherwise use raw resume data
+        const resumeMap = new Map();
+        allResumes.forEach(r => resumeMap.set(r.id, r));
+        allScreenedResumes.forEach(r => resumeMap.set(r.id, r)); // Screened overrides
+        
+        const mergedResumes = Array.from(resumeMap.values());
+        const screenedOnly = mergedResumes.filter(r => r.score > 0);
+        
+        setResumes(mergedResumes);
+        setFilteredResumes(screenedOnly);
+      } else {
+        // No jobs found - still fetch raw resumes for total count
+        const resumesData = await api.getResumes();
+        if (resumesData && resumesData.length > 0) {
+          const mappedResumes = resumesData.map((r: any) => ({
+            id: r.id,
+            name: r.parsed_data?.name || 'Unknown',
+            email: r.parsed_data?.email || '',
+            phone: r.parsed_data?.phone || '',
+            skills: r.parsed_data?.skills || [],
+            education: r.parsed_data?.education || '',
+            experience: r.parsed_data?.experience || '',
+            score: 0,
+            skillMatches: []
+          }));
+          setResumes(mappedResumes);
+        } else {
+          setResumes([]);
+        }
+        setFilteredResumes([]);
+      }
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setIsLoadingResumes(false);
     }
-  }, [useRealApi, isAuthenticated]);
+  }, [setResumes, setFilteredResumes]);
 
-  // Clear API stats when local data is cleared (e.g., all candidates deleted)
-  useEffect(() => {
-    if (resumes.length === 0 && filteredResumes.length === 0 && apiStats) {
-      // Local data is empty, clear cached API stats to show accurate state
-      setApiStats(null);
-    }
-  }, [resumes.length, filteredResumes.length]);
-
-  const fetchApiStats = async () => {
+  const fetchApiStats = useCallback(async () => {
     setIsLoadingStats(true);
     try {
       const stats = await api.getDashboardStats();
       setApiStats(stats);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
     } finally {
       setIsLoadingStats(false);
     }
-  };
+  }, []);
 
-  // Check if we have any local data
-  const hasLocalData = resumes.length > 0 || filteredResumes.length > 0;
+  // Clear API stats when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setApiStats(null);
+      setLastUpdated(null);
+    }
+  }, [isAuthenticated]);
+
+  // Fetch from backend on login to populate local store (only once per session)
+  // This ensures users see their data on any device/browser on first login
+  // All mutations (delete, add) sync to backend, so local store is source of truth after initial load
+  useEffect(() => {
+    if (useRealApi && isAuthenticated && !hasFetchedSessionData) {
+      setHasFetchedSessionData(true);
+      fetchScreeningResultsFromApi();
+      fetchApiStats();
+    }
+  }, [useRealApi, isAuthenticated, hasFetchedSessionData, setHasFetchedSessionData, fetchScreeningResultsFromApi, fetchApiStats]);
 
   const stats = useMemo(() => {
-    // Only use API stats if we have local data too (prevents stale data after deletion)
-    if (apiStats && useRealApi && hasLocalData) {
-      return {
-        totalCandidates: apiStats.total_resumes,
-        screenedCandidates: apiStats.total_screened,
-        totalInterviews: apiStats.total_interviews,
-        avgScore: apiStats.average_score,
-        topCandidates: apiStats.excellent_matches
-      };
-    }
+    // Calculate jobs count from local store (always use local since jobs are managed locally)
+    const activeJobs = jobs.filter(j => j.status === 'open').length;
+    const totalJobs = jobs.length;
 
+    // Always use local store data to ensure deletions are reflected
+    // Local store is the source of truth after any user modifications
     const totalCandidates = resumes.length;
     const screenedCandidates = filteredResumes.length;
     const totalInterviews = interviews.length;
@@ -63,15 +154,12 @@ export default function DashboardPage() {
       : 0;
     const topCandidates = filteredResumes.filter(r => r.score >= 75).length;
 
-    return { totalCandidates, screenedCandidates, totalInterviews, avgScore, topCandidates };
-  }, [resumes, filteredResumes, interviews, apiStats, useRealApi, hasLocalData]);
+    return { totalCandidates, screenedCandidates, totalInterviews, avgScore, topCandidates, activeJobs, totalJobs };
+  }, [resumes, filteredResumes, interviews, jobs]);
 
   const skillsData = useMemo(() => {
-    // Only use API stats if we have local data
-    if (apiStats?.skills_distribution && useRealApi && hasLocalData) {
-      return apiStats.skills_distribution;
-    }
-
+    // Always calculate from local store - it's the source of truth
+    // This ensures deletions are immediately reflected in the UI
     const skillCount: Record<string, number> = {};
     resumes.forEach(resume => {
       resume.skills.forEach(skill => {
@@ -83,57 +171,102 @@ export default function DashboardPage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([skill, count]) => ({ skill, count }));
-  }, [resumes, apiStats, useRealApi, hasLocalData]);
+  }, [resumes]);
 
   const scoreDistributionData = useMemo(() => {
-    // Only use API stats if we have local data
-    if (apiStats?.score_distribution && useRealApi && hasLocalData) {
-      return apiStats.score_distribution;
-    }
-
+    // Always calculate from local store - it's the source of truth
+    // This ensures deletions are immediately reflected in the UI
     return [
       { range: '0-44', count: filteredResumes.filter(r => r.score < 45).length },
       { range: '45-59', count: filteredResumes.filter(r => r.score >= 45 && r.score < 60).length },
       { range: '60-74', count: filteredResumes.filter(r => r.score >= 60 && r.score < 75).length },
       { range: '75-100', count: filteredResumes.filter(r => r.score >= 75).length },
     ];
-  }, [filteredResumes, apiStats, useRealApi, hasLocalData]);
+  }, [filteredResumes]);
 
   const performanceTrendData = useMemo(() => {
-    // Only use API stats if we have local data
-    if (apiStats?.top_candidates && useRealApi && hasLocalData) {
-      return apiStats.top_candidates.map(c => ({
-        name: c.name.split(' ')[0],
-        score: c.score
-      }));
-    }
-
+    // Always calculate from local store - it's the source of truth
+    // This ensures deletions are immediately reflected in the UI
     return filteredResumes.slice(0, 10).map((resume) => ({
       name: resume.name.split(' ')[0],
       score: resume.score
     }));
-  }, [filteredResumes, apiStats, useRealApi, hasLocalData]);
+  }, [filteredResumes]);
 
   const topCandidatesList = useMemo(() => {
-    // Only use API stats if we have local data
-    if (apiStats?.top_candidates && useRealApi && hasLocalData) {
-      return apiStats.top_candidates;
-    }
+    // Always calculate from local store - it's the source of truth
+    // This ensures deletions are immediately reflected in the UI
     return filteredResumes.slice(0, 5).map(r => ({
       id: r.id,
       name: r.name,
       email: r.email,
       score: r.score
     }));
-  }, [filteredResumes, apiStats, useRealApi, hasLocalData]);
+  }, [filteredResumes]);
 
   const statCards = [
+    { icon: <Briefcase className="h-6 w-6" />, label: 'Active Jobs', value: stats.activeJobs, color: 'from-indigo-500 to-violet-500' },
     { icon: <Users className="h-6 w-6" />, label: 'Total Candidates', value: stats.totalCandidates, color: 'from-blue-500 to-cyan-500' },
     { icon: <FileText className="h-6 w-6" />, label: 'Screened', value: stats.screenedCandidates, color: 'from-green-500 to-emerald-500' },
     { icon: <MessageSquare className="h-6 w-6" />, label: 'Interviews', value: stats.totalInterviews, color: 'from-purple-500 to-pink-500' },
     { icon: <TrendingUp className="h-6 w-6" />, label: 'Avg Score', value: `${stats.avgScore}%`, color: 'from-amber-500 to-orange-500' },
     { icon: <Award className="h-6 w-6" />, label: 'Top Matches', value: stats.topCandidates, color: 'from-rose-500 to-red-500' }
   ];
+
+  // Time-to-Hire Metrics
+  const timeToHireMetrics = useMemo(() => {
+    const hiredCandidates = candidateJobAssignments.filter(a => a.status === 'hired');
+    const screeningCandidates = candidateJobAssignments.filter(a => a.status === 'screening');
+    const interviewCandidates = candidateJobAssignments.filter(a => a.status === 'interview');
+    const offerCandidates = candidateJobAssignments.filter(a => a.status === 'offer');
+    
+    // Calculate time in pipeline for each job
+    const jobMetrics = jobs.map(job => {
+      const jobHires = hiredCandidates.filter(h => h.jobId === job.id);
+      const jobAssignments = candidateJobAssignments.filter(a => a.jobId === job.id);
+      const jobCreatedDate = new Date(job.createdAt);
+      const daysSinceCreation = Math.floor((Date.now() - jobCreatedDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      return {
+        jobId: job.id,
+        jobTitle: job.title,
+        status: job.status,
+        daysOpen: daysSinceCreation,
+        totalCandidates: jobAssignments.length,
+        hiredCount: jobHires.length,
+        inPipeline: jobAssignments.filter(a => ['screening', 'interview', 'offer'].includes(a.status)).length
+      };
+    });
+    
+    // Average days to fill (for jobs with at least one hire)
+    const filledJobs = jobMetrics.filter(j => j.hiredCount > 0);
+    const avgDaysToFill = filledJobs.length > 0
+      ? Math.round(filledJobs.reduce((acc, j) => acc + j.daysOpen, 0) / filledJobs.length)
+      : 0;
+    
+    // Current pipeline breakdown
+    const pipelineBreakdown = {
+      new: candidateJobAssignments.filter(a => a.status === 'new').length,
+      screening: screeningCandidates.length,
+      interview: interviewCandidates.length,
+      offer: offerCandidates.length,
+      hired: hiredCandidates.length,
+      rejected: candidateJobAssignments.filter(a => a.status === 'rejected').length
+    };
+    
+    // Oldest open job
+    const openJobs = jobMetrics.filter(j => j.status === 'open' && j.hiredCount === 0);
+    const oldestOpenJob = openJobs.sort((a, b) => b.daysOpen - a.daysOpen)[0];
+    
+    return {
+      avgDaysToFill,
+      totalHired: hiredCandidates.length,
+      openPositions: jobs.filter(j => j.status === 'open').length,
+      pipelineBreakdown,
+      oldestOpenJob,
+      jobMetrics: jobMetrics.slice(0, 5)
+    };
+  }, [jobs, candidateJobAssignments]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
@@ -196,13 +329,23 @@ export default function DashboardPage() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={fetchApiStats}
-                  disabled={isLoadingStats}
+                  onClick={() => {
+                    fetchApiStats();
+                    fetchScreeningResultsFromApi();
+                  }}
+                  disabled={isLoadingStats || isLoadingResumes}
                   className="px-4 py-2 bg-white dark:bg-gray-800 rounded-xl text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors flex items-center gap-2"
                 >
-                  <RefreshCw className={`h-4 w-4 ${isLoadingStats ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-4 w-4 ${isLoadingStats || isLoadingResumes ? 'animate-spin' : ''}`} />
                   Refresh
                 </motion.button>
+              )}
+              
+              {lastUpdated && useRealApi && isAuthenticated && (
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <Clock className="h-3 w-3" />
+                  <span>Updated {lastUpdated.toLocaleTimeString()}</span>
+                </div>
               )}
             </div>
           </div>
@@ -233,14 +376,14 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8"
+          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8"
         >
           {statCards.map((stat, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 + index * 0.05 }}
+              transition={{ delay: Math.min(0.1 + index * 0.03, 0.3) }}
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800 hover:shadow-xl hover:border-primary-500/30 transition-all duration-300"
             >
@@ -252,6 +395,92 @@ export default function DashboardPage() {
             </motion.div>
           ))}
         </motion.div>
+
+        {/* Time-to-Hire Analytics Section */}
+        {(jobs.length > 0 || candidateJobAssignments.length > 0) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mb-8"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                <Timer className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Time-to-Hire Analytics</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Track your hiring pipeline efficiency</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Average Days to Fill */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-cyan-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Days to Fill</span>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {timeToHireMetrics.avgDaysToFill > 0 ? timeToHireMetrics.avgDaysToFill : '—'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  {timeToHireMetrics.totalHired > 0 ? `Based on ${timeToHireMetrics.totalHired} hire${timeToHireMetrics.totalHired > 1 ? 's' : ''}` : 'No hires yet'}
+                </p>
+              </div>
+
+              {/* Open Positions */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <Briefcase className="h-4 w-4 text-indigo-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Open Positions</span>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {timeToHireMetrics.openPositions}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  {timeToHireMetrics.oldestOpenJob ? `Oldest: ${timeToHireMetrics.oldestOpenJob.daysOpen} days` : 'No open jobs'}
+                </p>
+              </div>
+
+              {/* Total Hired */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Hired</span>
+                </div>
+                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {timeToHireMetrics.totalHired}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  All time
+                </p>
+              </div>
+
+              {/* Pipeline Breakdown */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Pipeline</span>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-blue-600 dark:text-blue-400">Screening</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">{timeToHireMetrics.pipelineBreakdown.screening}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-purple-600 dark:text-purple-400">Interview</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">{timeToHireMetrics.pipelineBreakdown.interview}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-amber-600 dark:text-amber-400">Offer</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">{timeToHireMetrics.pipelineBreakdown.offer}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -279,7 +508,7 @@ export default function DashboardPage() {
             className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-800 p-6"
           >
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Score Distribution</h2>
-            {filteredResumes.length > 0 ? (
+            {scoreDistributionData.some(d => d.count > 0) ? (
               <ScoreDistributionChart data={scoreDistributionData} />
             ) : (
               <div className="h-[300px] flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
@@ -337,7 +566,7 @@ export default function DashboardPage() {
                   key={candidate.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 + index * 0.05 }}
+                  transition={{ delay: Math.min(0.3 + index * 0.03, 0.5) }}
                   className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
                 >
                   <div className="flex items-center gap-4">
@@ -395,6 +624,17 @@ export default function DashboardPage() {
           )}
         </motion.div>
       </div>
+      
+      {/* Real-time Updates Indicator */}
+      <RealtimeIndicator 
+        showNotifications={true}
+        onEvent={(event) => {
+          // Refresh data when relevant events occur
+          if (['resume_uploaded', 'candidate_scored', 'job_created', 'job_deleted'].includes(event.type)) {
+            fetchScreeningResultsFromApi();
+          }
+        }}
+      />
     </div>
   );
 }

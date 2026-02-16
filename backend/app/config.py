@@ -25,10 +25,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
     
-    # OpenAI API (for Whisper Speech-to-Text)
-    OPENAI_API_KEY: str = ""
-    
-    # AWS S3 Configuration
+    # AWS S3 Configuration (optional, uses local storage if not configured)
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_S3_BUCKET: str = "hireq-uploads"
@@ -47,6 +44,18 @@ class Settings(BaseSettings):
     SPACY_MODEL: str = "en_core_web_sm"  # Changed from en_core_web_lg (~780MB -> ~12MB)
     SENTENCE_TRANSFORMER_MODEL: str = "all-MiniLM-L6-v2"  # Already lightweight (~80MB)
     SENTIMENT_MODEL: str = "distilbert-base-uncased-finetuned-sst-2-english"  # Keep for accuracy
+    
+    # Whisper Model (local, no API key needed)
+    # Options: tiny (~39MB), base (~74MB), small (~244MB), medium (~769MB), large (~1.5GB)
+    # Smaller = faster but less accurate, larger = slower but more accurate
+    WHISPER_MODEL: str = "base"  # Good balance of speed and accuracy
+    
+    # AI Chatbot Configuration
+    GEMINI_API_KEY: str = ""  # Get a free API key at: https://aistudio.google.com/apikey
+    
+    # Email Configuration (Resend)
+    RESEND_API_KEY: str = ""  # Get API key at: https://resend.com
+    FROM_EMAIL: str = "noreply@hireq.app"
     
     # Upload directory (local fallback)
     UPLOAD_DIR: str = "uploads"

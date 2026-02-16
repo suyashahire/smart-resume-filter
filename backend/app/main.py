@@ -9,7 +9,7 @@ import uvicorn
 
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
-from app.routes import auth, resumes, jobs, interviews, reports
+from app.routes import auth, resumes, jobs, interviews, reports, realtime, chat, candidate, admin, messaging
 
 
 @asynccontextmanager
@@ -40,6 +40,16 @@ async def lifespan(app: FastAPI):
         sentiment_service = get_sentiment_service()
         await sentiment_service._initialize()
         print("  ✅ Sentiment analysis model loaded")
+        
+        # Initialize RAG and Chatbot services
+        from app.services.rag import get_rag_service
+        from app.services.chatbot import get_chatbot_service
+        
+        rag_service = get_rag_service()
+        await rag_service._initialize()
+        
+        chatbot_service = get_chatbot_service()
+        await chatbot_service._initialize()
         
         print("✅ All ML models pre-loaded successfully!")
     except Exception as e:
@@ -107,6 +117,11 @@ app.include_router(resumes.router, prefix="/api/resumes", tags=["Resumes"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Job Descriptions"])
 app.include_router(interviews.router, prefix="/api/interviews", tags=["Interviews"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.include_router(realtime.router, prefix="/api/realtime", tags=["Real-time Updates"])
+app.include_router(chat.router, prefix="/api/chat", tags=["AI Chatbot"])
+app.include_router(candidate.router, prefix="/api/candidate", tags=["Candidate Portal"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(messaging.router, prefix="/api/messages", tags=["Messaging"])
 
 
 @app.get("/", tags=["Root"])

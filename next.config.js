@@ -7,6 +7,9 @@ const nextConfig = {
   // Optimize for faster builds
   swcMinify: true,
   
+  // Enable standalone output for Docker deployment
+  output: 'standalone',
+  
   // Reduce bundle size by excluding large dependencies from client
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],

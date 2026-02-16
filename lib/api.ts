@@ -93,28 +93,37 @@ export interface AuthResponse {
     email: string;
     role: string;
     is_active: boolean;
+    account_status?: string;
     created_at: string;
     last_login: string | null;
   };
 }
 
-export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
+export async function login(email: string, password: string): Promise<AuthResponse> {
   const response = await apiRequest<AuthResponse>('/auth/login/json', {
     method: 'POST',
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({ email, password }),
   });
   
   setAuthToken(response.access_token);
   return response;
 }
 
-export async function register(data: RegisterData): Promise<AuthResponse> {
+export async function register(
+  name: string,
+  email: string,
+  password: string,
+  role: 'hr_manager' | 'candidate' = 'hr_manager'
+): Promise<AuthResponse> {
   const response = await apiRequest<AuthResponse>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ name, email, password, role }),
   });
   
-  setAuthToken(response.access_token);
+  // Only set token if account is approved (candidates get tokens immediately)
+  if (response.access_token) {
+    setAuthToken(response.access_token);
+  }
   return response;
 }
 
@@ -209,6 +218,22 @@ export async function deleteResume(id: string): Promise<void> {
   await apiRequest(`/resumes/${id}`, { method: 'DELETE' });
 }
 
+export async function downloadResume(id: string): Promise<Blob> {
+  const token = getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/resumes/${id}/download`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to download resume');
+  }
+  
+  return response.blob();
+}
+
 // ==================== Job Descriptions ====================
 
 export interface JobDescriptionCreate {
@@ -257,7 +282,7 @@ export async function createJobDescription(data: JobDescriptionCreate): Promise<
 }
 
 export async function getJobDescriptions(): Promise<JobDescriptionResponse[]> {
-  return apiRequest('/jobs');
+  return apiRequest('/jobs', { cache: 'no-store' });
 }
 
 export async function getJobDescription(id: string): Promise<JobDescriptionResponse> {
@@ -430,6 +455,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   return apiRequest('/reports/dashboard/stats');
 }
 
+export async function cleanupOrphanedScreeningResults(): Promise<{ message: string; deleted_count: number }> {
+  return apiRequest('/reports/cleanup/orphaned-screening-results', {
+    method: 'DELETE',
+  });
+}
+
 // ==================== Health Check ====================
 
 export async function healthCheck(): Promise<{ status: string }> {
@@ -458,6 +489,224 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function deleteAccount(): Promise<{ message: string }> {
   return apiRequest('/auth/account', {
     method: 'DELETE',
+  });
+}
+
+// ==================== Candidate Portal ====================
+
+export interface CandidateApplication {
+  id: string;
+  candidate_id: string;
+  job_id: string;
+  job_title?: string;
+  company?: string;
+  resume_id?: string;
+  status: string;
+  status_history: Array<{
+    from_status?: string;
+    to_status: string;
+    changed_at: string;
+    note?: string;
+  }>;
+  screening_result_id?: string;
+  applied_at: string;
+  updated_at: string;
+  score?: number;
+  score_visible?: boolean;
+  feedback?: string;
+  feedback_at?: string;
+}
+
+export interface CandidateApplicationList {
+  applications: CandidateApplication[];
+  total: number;
+}
+
+export async function getOpenJobs(): Promise<JobDescriptionResponse[]> {
+  return apiRequest('/candidate/jobs', { cache: 'no-store' });
+}
+
+export async function getJobDetail(id: string): Promise<JobDescriptionResponse> {
+  return apiRequest(`/candidate/jobs/${id}`);
+}
+
+export async function applyToJob(jobId: string, resumeId?: string): Promise<CandidateApplication> {
+  return apiRequest(`/candidate/jobs/${jobId}/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ resume_id: resumeId }),
+  });
+}
+
+export async function getCandidateApplications(): Promise<CandidateApplicationList> {
+  return apiRequest('/candidate/applications');
+}
+
+export async function getApplicationDetail(id: string): Promise<CandidateApplication> {
+  return apiRequest(`/candidate/applications/${id}`);
+}
+
+export async function withdrawApplication(id: string): Promise<{ message: string }> {
+  return apiRequest(`/candidate/applications/${id}/withdraw`, {
+    method: 'POST',
+  });
+}
+
+export async function getCandidateResume(): Promise<any> {
+  return apiRequest('/candidate/resume');
+}
+
+export async function uploadCandidateResume(file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const token = getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/candidate/resume`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+    throw new Error(error.detail);
+  }
+  
+  return response.json();
+}
+
+export async function getCandidateProfile(): Promise<any> {
+  return apiRequest('/candidate/profile');
+}
+
+// ==================== Messaging ====================
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  sent_at: string;
+  read_at?: string;
+  is_mine: boolean;
+}
+
+export interface ChatConversation {
+  id: string;
+  other_user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  job_id?: string;
+  job_title?: string;
+  last_message_at: string;
+  last_message_preview?: string;
+  unread_count: number;
+  created_at: string;
+}
+
+export async function getConversations(): Promise<{ conversations: ChatConversation[]; total: number }> {
+  return apiRequest('/messages/conversations');
+}
+
+export async function getConversationMessages(
+  conversationId: string
+): Promise<{ messages: ChatMessage[]; conversation_id: string; total: number }> {
+  return apiRequest(`/messages/conversations/${conversationId}`);
+}
+
+export async function sendMessage(
+  receiverId: string,
+  content: string,
+  jobId?: string
+): Promise<ChatMessage> {
+  return apiRequest('/messages/send', {
+    method: 'POST',
+    body: JSON.stringify({
+      receiver_id: receiverId,
+      content,
+      job_id: jobId,
+    }),
+  });
+}
+
+export async function markMessagesAsRead(conversationId: string): Promise<{ message: string }> {
+  return apiRequest(`/messages/read/${conversationId}`, {
+    method: 'POST',
+  });
+}
+
+export async function getUnreadCount(): Promise<{ unread_count: number }> {
+  return apiRequest('/messages/unread');
+}
+
+// ==================== Admin ====================
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  account_status: string;
+  rejection_reason?: string;
+  created_at: string;
+  last_login?: string;
+}
+
+export async function getAllUsers(
+  filters?: { role?: string; account_status?: string; search?: string }
+): Promise<AdminUser[]> {
+  const params = new URLSearchParams();
+  if (filters?.role) params.append('role', filters.role);
+  if (filters?.account_status) params.append('account_status', filters.account_status);
+  if (filters?.search) params.append('search', filters.search);
+  
+  const query = params.toString();
+  return apiRequest(`/admin/users${query ? `?${query}` : ''}`);
+}
+
+export async function getPendingUsers(): Promise<AdminUser[]> {
+  return apiRequest('/admin/users/pending');
+}
+
+export async function approveUser(userId: string): Promise<{ message: string }> {
+  return apiRequest(`/admin/users/${userId}/approve`, {
+    method: 'POST',
+  });
+}
+
+export async function rejectUser(userId: string, reason: string): Promise<{ message: string }> {
+  return apiRequest(`/admin/users/${userId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function getAdminStats(): Promise<{
+  total_users: number;
+  pending_approval: number;
+  active_users: number;
+  by_role: { hr_managers: number; candidates: number; admins: number };
+}> {
+  return apiRequest('/admin/stats');
+}
+
+// ==================== HR Feedback ====================
+
+export async function sendCandidateFeedback(
+  screeningId: string,
+  feedback: string,
+  showScore: boolean = true
+): Promise<{ message: string }> {
+  return apiRequest(`/reports/screening/${screeningId}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify({ feedback, show_score: showScore }),
   });
 }
 

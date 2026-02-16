@@ -3,15 +3,25 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Sparkles, AlertCircle, Cloud, HardDrive, Zap, ArrowRight, ArrowLeft, FileText, Target, Brain, CheckCircle } from 'lucide-react';
-import Button from '@/components/Button';
-import { useStore } from '@/store/useStore';
+import { Briefcase, Sparkles, Cloud, HardDrive, Zap, ArrowRight, ArrowLeft, FileText, Target, Brain, CheckCircle } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import { useStore, Job } from '@/store/useStore';
 import { parseJobDescription, screenCandidates } from '@/lib/mockApi';
 import * as api from '@/lib/api';
 
 export default function JobDescriptionPage() {
   const router = useRouter();
-  const { resumes, setJobDescription, setFilteredResumes, setIsLoading, useRealApi, isAuthenticated } = useStore();
+  const { 
+    resumes, 
+    setJobDescription, 
+    setFilteredResumes, 
+    setIsLoading, 
+    useRealApi, 
+    isAuthenticated,
+    addJob,
+    setCurrentJobId,
+    assignCandidateToJob
+  } = useStore();
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -52,7 +62,9 @@ export default function JobDescriptionPage() {
         
         setProcessingStep('Screening candidates with AI...');
         
-        const results = await api.screenCandidates(jobResponse.id);
+        // Pass only the resume IDs from the current store to avoid screening old resumes
+        const resumeIds = resumes.map(r => r.id);
+        const results = await api.screenCandidates(jobResponse.id, resumeIds);
         
         rankedCandidates = results.map(r => ({
           id: r.id,
@@ -75,12 +87,33 @@ export default function JobDescriptionPage() {
         };
         setJobDescription(jobDesc);
         
+        // Add to jobs array for Jobs page
+        const newJob: Job = {
+          id: jobResponse.id,
+          title,
+          description,
+          requiredSkills,
+          experience,
+          status: 'open',
+          createdAt: new Date().toISOString(),
+          candidateCount: 0  // Will be incremented by assignCandidateToJob
+        };
+        addJob(newJob);
+        setCurrentJobId(newJob.id);
+        
+        // Assign all screened candidates to this job
+        rankedCandidates.forEach(candidate => {
+          assignCandidateToJob(candidate.id, newJob.id);
+        });
+        
       } else {
         setProcessingStep('Extracting skills from description...');
         requiredSkills = await parseJobDescription(description);
         setExtractedSkills(requiredSkills);
         
+        const jobId = `job_${Date.now()}`;
         const jobDesc = {
+          id: jobId,
           title,
           description,
           requiredSkills,
@@ -90,6 +123,25 @@ export default function JobDescriptionPage() {
 
         setProcessingStep('Ranking candidates...');
         rankedCandidates = await screenCandidates(resumes, jobDesc);
+        
+        // Add to jobs array for Jobs page
+        const newJob: Job = {
+          id: jobId,
+          title,
+          description,
+          requiredSkills,
+          experience,
+          status: 'open',
+          createdAt: new Date().toISOString(),
+          candidateCount: 0  // Will be incremented by assignCandidateToJob
+        };
+        addJob(newJob);
+        setCurrentJobId(newJob.id);
+        
+        // Assign all screened candidates to this job
+        rankedCandidates.forEach(candidate => {
+          assignCandidateToJob(candidate.id, newJob.id);
+        });
       }
 
       setFilteredResumes(rankedCandidates);
@@ -100,7 +152,8 @@ export default function JobDescriptionPage() {
       }, 500);
     } catch (error) {
       console.error('Error processing job description:', error);
-      alert(error instanceof Error ? error.message : 'Failed to process job description');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process job description';
+      alert(errorMessage);
     } finally {
       setIsProcessing(false);
       setIsLoading(false);

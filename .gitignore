@@ -1,42 +1,72 @@
+# ===================
 # Dependencies
+# ===================
 node_modules/
 /.pnp
 .pnp.js
 
-# Testing
-/coverage
-
+# ===================
 # Next.js
+# ===================
 /.next/
 /out/
-
-# Production
 /build
 
-# Misc
-.DS_Store
-*.pem
-Thumbs.db
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
+# ===================
 # Environment files
+# ===================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 *.env
+!.env.example
+!backend/.env.example
 
-# Vercel
-.vercel
+# ===================
+# OS generated files
+# ===================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
 
+# ===================
+# IDE / Editor
+# ===================
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# ===================
+# Debug logs
+# ===================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===================
 # TypeScript
+# ===================
 *.tsbuildinfo
 next-env.d.ts
+
+# ===================
+# Testing
+# ===================
+/coverage
+
+# ===================
+# Misc
+# ===================
+*.pem
+.vercel
 
 # ===================
 # Backend (Python)
@@ -61,7 +91,7 @@ backend/dist/
 backend/*.egg-info/
 backend/.eggs/
 
-# Uploads (user files - don't commit)
+# Uploads (user files)
 backend/uploads/
 uploads/
 
@@ -70,12 +100,9 @@ backend/.env
 backend/.env.local
 backend/.env.production
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*.swn
+# ChromaDB data (RAG vector store)
+backend/chroma_data/
+chroma_data/
 
 # Pytest
 .pytest_cache/
@@ -83,17 +110,7 @@ backend/.env.production
 htmlcov/
 
 # ===================
-# References (large files)
+# Large / generated files
 # ===================
 references/
 *.pdf
-
-# ===================
-# OS generated files
-# ===================
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db

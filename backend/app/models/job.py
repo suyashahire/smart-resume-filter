@@ -27,8 +27,13 @@ class JobDescription(Document):
     job_type: str = "full-time"  # full-time, part-time, contract, internship
     
     # Status
+    status: str = "open"  # open, closed, draft
     is_active: bool = Field(default=True)
     candidates_screened: int = Field(default=0)
+    
+    # Company info (for candidate display)
+    company: Optional[str] = None
+    company_logo: Optional[str] = None
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
