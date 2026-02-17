@@ -306,6 +306,9 @@ async def withdraw_application(
 ):
     """
     Withdraw an application.
+    
+    This permanently deletes the application and any associated
+    screening result from the database.
     """
     application = await Application.get(application_id)
     
@@ -322,29 +325,60 @@ async def withdraw_application(
             detail="You can only withdraw your own applications"
         )
     
-    # Check if can be withdrawn
-    if application.status in [ApplicationStatus.HIRED, ApplicationStatus.WITHDRAWN]:
+    # Check if can be withdrawn (hired cannot be withdrawn)
+    if application.status == ApplicationStatus.HIRED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This application cannot be withdrawn"
         )
     
-    # Update status
-    old_status = application.status.value
-    application.status = ApplicationStatus.WITHDRAWN
-    application.status_history.append(
-        StatusChange(
-            from_status=old_status,
-            to_status=ApplicationStatus.WITHDRAWN.value,
-            changed_at=datetime.utcnow(),
-            note="Application withdrawn by candidate"
+    # Delete associated screening result if exists
+    if application.screening_result_id:
+        screening = await ScreeningResult.get(application.screening_result_id)
+        if screening:
+            await screening.delete()
+    
+    # Delete the application record
+    await application.delete()
+    
+    return {"message": "Application withdrawn and deleted successfully"}
+
+
+@router.delete("/applications/{application_id}")
+async def delete_application(
+    application_id: str,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Delete an application permanently.
+    
+    Removes the application and any associated screening result.
+    """
+    application = await Application.get(application_id)
+    
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found"
         )
-    )
-    application.updated_at = datetime.utcnow()
     
-    await application.save()
+    # Verify ownership
+    if application.candidate_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own applications"
+        )
     
-    return {"message": "Application withdrawn successfully"}
+    # Delete associated screening result if exists
+    if application.screening_result_id:
+        screening = await ScreeningResult.get(application.screening_result_id)
+        if screening:
+            await screening.delete()
+    
+    # Delete the application record
+    await application.delete()
+    
+    return {"message": "Application deleted successfully"}
 
 
 # ==================== Resume Management ====================
@@ -370,7 +404,7 @@ async def get_my_resume(
         "message": "Resume found",
         "resume": {
             "id": str(resume.id),
-            "filename": resume.filename,
+            "file_name": resume.file_name,
             "parsed_data": resume.parsed_data,
             "created_at": resume.created_at,
             "updated_at": resume.updated_at,
@@ -406,24 +440,46 @@ async def upload_my_resume(
             detail="File size exceeds 5MB limit"
         )
     
-    # Parse resume
-    parser = get_resume_parser()
-    parsed_data = await parser.parse_resume(content, file.filename)
+    # Save file to disk for parsing
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "resumes")
+    os.makedirs(upload_dir, exist_ok=True)
     
-    if not parsed_data:
+    safe_filename = f"{current_user.id}_{file.filename}"
+    file_path = os.path.join(upload_dir, safe_filename)
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Parse resume from file path
+    parser = get_resume_parser()
+    try:
+        parsed_data, raw_text = await parser.parse_resume(file_path)
+    except Exception as e:
+        # Clean up file on parse failure
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to parse resume"
+            detail=f"Failed to parse resume: {str(e)}"
         )
     
     # Check if user already has a resume
     existing_resume = await Resume.find_one({"user_id": str(current_user.id)})
     
     if existing_resume:
+        # Delete old file if different
+        if existing_resume.file_path and existing_resume.file_path != file_path:
+            if os.path.exists(existing_resume.file_path):
+                os.remove(existing_resume.file_path)
         # Update existing resume
-        existing_resume.filename = file.filename
-        existing_resume.file_content = content
+        existing_resume.file_name = file.filename
+        existing_resume.file_path = file_path
+        existing_resume.file_size = len(content)
+        existing_resume.file_type = file.content_type or "application/octet-stream"
         existing_resume.parsed_data = parsed_data
+        existing_resume.raw_text = raw_text
+        existing_resume.is_parsed = True
+        existing_resume.parse_error = None
         existing_resume.updated_at = datetime.utcnow()
         await existing_resume.save()
         resume = existing_resume
@@ -431,9 +487,13 @@ async def upload_my_resume(
         # Create new resume
         resume = Resume(
             user_id=str(current_user.id),
-            filename=file.filename,
-            file_content=content,
+            file_name=file.filename,
+            file_path=file_path,
+            file_size=len(content),
+            file_type=file.content_type or "application/octet-stream",
             parsed_data=parsed_data,
+            raw_text=raw_text,
+            is_parsed=True,
         )
         await resume.insert()
     
@@ -441,7 +501,7 @@ async def upload_my_resume(
         "message": "Resume uploaded successfully",
         "resume": {
             "id": str(resume.id),
-            "filename": resume.filename,
+            "file_name": resume.file_name,
             "parsed_data": parsed_data,
         }
     }

@@ -1,57 +1,59 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import {
-  Building,
   MapPin,
-  Briefcase,
   Clock,
   DollarSign,
-  ArrowRight,
-  Check,
+  Briefcase,
+  ChevronRight,
+  Building,
+  CheckCircle,
   Loader2,
-  Globe,
-  Sparkles,
+  Zap,
 } from 'lucide-react';
 import { applyToJob } from '@/lib/api';
-
-const CARD_CLASS =
-  'rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-candidate-400/40 dark:hover:border-candidate-500/40 hover:shadow-md hover:-translate-y-0.5';
-
-const jobTypeStyles: Record<string, string> = {
-  'full-time': 'bg-green-500/10 text-green-500 border-green-500/20',
-  'part-time': 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  contract: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  internship: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-};
 
 export interface JobItem {
   id: string;
   title: string;
-  description?: string;
+  description: string;
   company?: string;
-  job_type?: string;
   location?: string;
   salary_range?: string;
-  remote?: boolean;
-  required_skills?: string[];
+  job_type: string;
+  required_skills: string[];
+  experience_required?: string;
   created_at: string;
-  match_score?: number;
+  remote?: boolean;
 }
 
 interface JobCardProps {
   job: JobItem;
   hasApplied: boolean;
-  onAppliedSuccess?: (jobId: string) => void;
+  onAppliedSuccess: (jobId: string) => void;
   index?: number;
 }
 
-function formatDate(dateString: string) {
+const JOB_TYPE_STYLES: Record<string, string> = {
+  'full-time':
+    'bg-green-50 text-green-700 ring-green-200/60 dark:bg-green-900/20 dark:text-green-400 dark:ring-green-700/40',
+  'part-time':
+    'bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-900/20 dark:text-blue-400 dark:ring-blue-700/40',
+  contract:
+    'bg-purple-50 text-purple-700 ring-purple-200/60 dark:bg-purple-900/20 dark:text-purple-400 dark:ring-purple-700/40',
+  internship:
+    'bg-orange-50 text-orange-700 ring-orange-200/60 dark:bg-orange-900/20 dark:text-orange-400 dark:ring-orange-700/40',
+};
+
+function formatDate(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor(
+    (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+  );
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays}d ago`;
@@ -66,43 +68,59 @@ export default function JobCard({
   index = 0,
 }: JobCardProps) {
   const [isApplying, setIsApplying] = useState(false);
-  const [applied, setApplied] = useState(hasApplied);
   const [error, setError] = useState<string | null>(null);
-  const typeStyle = jobTypeStyles[job.job_type || 'full-time'] || jobTypeStyles['full-time'];
+
+  const typeKey = (job.job_type || 'full-time').toLowerCase();
+  const typeStyle = JOB_TYPE_STYLES[typeKey] || JOB_TYPE_STYLES['full-time'];
 
   const handleQuickApply = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (applied || isApplying) return;
+    if (hasApplied || isApplying) return;
     setIsApplying(true);
     setError(null);
     try {
       await applyToJob(job.id);
-      setApplied(true);
-      onAppliedSuccess?.(job.id);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to apply');
+      onAppliedSuccess(job.id);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to apply');
     } finally {
       setIsApplying(false);
     }
   };
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 12 }}
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.25 }}
+      transition={{ delay: index * 0.04, duration: 0.22 }}
     >
-      <Link href={`/candidate/jobs/${job.id}`} className="block group">
-        <div className={CARD_CLASS}>
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-candidate-500/15 to-cyan-500/15 dark:from-candidate-500/10 dark:to-cyan-500/10 border border-candidate-200/50 dark:border-candidate-700/30 flex items-center justify-center flex-shrink-0">
-                  <Building className="h-6 w-6 text-candidate-600 dark:text-candidate-400" />
+      <Link href={`/candidate/jobs/${job.id}`} className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-candidate-500 rounded-2xl">
+        <div
+          className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50
+            bg-white/80 dark:bg-gray-900/60 backdrop-blur-lg
+            hover:border-candidate-300/60 dark:hover:border-candidate-600/40
+            hover:shadow-md hover:shadow-candidate-500/5
+            transition-all duration-200"
+        >
+          <div className="p-5 sm:p-6">
+            {/* ── Header row ── */}
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-start gap-3.5 min-w-0">
+                {/* Company icon */}
+                <div className="flex-shrink-0 w-11 h-11 rounded-xl
+                  bg-gradient-to-br from-candidate-500/10 to-purple-500/10
+                  dark:from-candidate-500/20 dark:to-purple-500/20
+                  border border-candidate-200/30 dark:border-candidate-700/30
+                  flex items-center justify-center"
+                >
+                  <Building className="h-5 w-5 text-candidate-600 dark:text-candidate-400" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate group-hover:text-candidate-600 dark:group-hover:text-candidate-400 transition-colors">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white
+                    group-hover:text-candidate-600 dark:group-hover:text-candidate-400
+                    transition-colors truncate"
+                  >
                     {job.title}
                   </h3>
                   {job.company && (
@@ -112,110 +130,129 @@ export default function JobCard({
                   )}
                 </div>
               </div>
+
+              <ChevronRight className="h-4.5 w-4.5 text-gray-300 dark:text-gray-600
+                group-hover:text-candidate-500 group-hover:translate-x-0.5
+                transition-all flex-shrink-0 mt-1"
+              />
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-3">
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${typeStyle}`}
-              >
+            {/* ── Meta badges ── */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ring-1 ring-inset ${typeStyle}`}>
                 <Briefcase className="h-3 w-3" />
-                {(job.job_type || 'full-time').replace('-', ' ')}
+                {(job.job_type || 'Full-time').replace('-', ' ')}
               </span>
+              {job.location && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium
+                  bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200/60
+                  dark:bg-gray-800/60 dark:text-gray-400 dark:ring-gray-700/40"
+                >
+                  <MapPin className="h-3 w-3" />
+                  {job.location}
+                </span>
+              )}
+              {job.salary_range && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium
+                  bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200/60
+                  dark:bg-gray-800/60 dark:text-gray-400 dark:ring-gray-700/40"
+                >
+                  <DollarSign className="h-3 w-3" />
+                  {job.salary_range}
+                </span>
+              )}
               {job.remote && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                  <Globe className="h-3 w-3" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium
+                  bg-candidate-50 text-candidate-700 ring-1 ring-inset ring-candidate-200/60
+                  dark:bg-candidate-900/20 dark:text-candidate-400 dark:ring-candidate-700/40"
+                >
                   Remote
                 </span>
               )}
-              {job.match_score !== undefined && job.match_score > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-candidate-500/10 text-candidate-500 border border-candidate-500/20">
-                  <Sparkles className="h-3 w-3" />
-                  {Math.round(job.match_score)}% match
-                </span>
-              )}
             </div>
 
-            {job.location && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-3">
-                <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">{job.location}</span>
-              </div>
-            )}
+            {/* ── Description ── */}
+            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed mb-3">
+              {job.description}
+            </p>
 
-            {job.description && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">
-                {job.description}
-              </p>
-            )}
-
-            {job.required_skills?.length ? (
+            {/* ── Skills ── */}
+            {job.required_skills?.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {job.required_skills.slice(0, 4).map((skill: string, i: number) => (
+                {job.required_skills.slice(0, 5).map((skill, i) => (
                   <span
                     key={i}
-                    className="px-2 py-1 bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 text-xs rounded-md"
+                    className="px-2 py-0.5 text-[11px] font-medium rounded-md
+                      bg-candidate-50 dark:bg-candidate-900/15
+                      text-candidate-700 dark:text-candidate-300
+                      border border-candidate-100 dark:border-candidate-800/40"
                   >
                     {skill}
                   </span>
                 ))}
-                {job.required_skills.length > 4 && (
-                  <span className="px-2 py-1 text-gray-500 text-xs">
-                    +{job.required_skills.length - 4} more
+                {job.required_skills.length > 5 && (
+                  <span className="px-2 py-0.5 text-[11px] font-medium rounded-md
+                    bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400
+                    border border-gray-100 dark:border-gray-700/40"
+                  >
+                    +{job.required_skills.length - 5}
                   </span>
                 )}
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-4 flex-wrap">
-                {job.salary_range && (
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <DollarSign className="h-4 w-4 text-green-500 flex-shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {job.salary_range}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formatDate(job.created_at)}
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <motion.button
+            {/* ── Footer ── */}
+            <div className="flex items-center justify-between pt-3.5 border-t border-gray-100 dark:border-gray-800/60">
+              <span className="flex items-center text-xs text-gray-400 dark:text-gray-500">
+                <Clock className="h-3 w-3 mr-1.5" />
+                Posted {formatDate(job.created_at)}
+              </span>
+
+              {hasApplied ? (
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl
+                  bg-green-50 dark:bg-green-900/20
+                  text-xs font-semibold text-green-600 dark:text-green-400
+                  ring-1 ring-inset ring-green-200/60 dark:ring-green-700/30"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Applied
+                </span>
+              ) : (
+                <button
+                  type="button"
                   onClick={handleQuickApply}
-                  disabled={isApplying || applied}
-                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-200 ${
-                    applied
-                      ? 'bg-green-500 cursor-default'
-                      : isApplying
-                        ? 'bg-gray-400 dark:bg-gray-600 cursor-wait'
-                        : 'bg-candidate-500 hover:bg-candidate-600 dark:bg-candidate-600 dark:hover:bg-candidate-500 shadow-sm shadow-candidate-500/20 hover:shadow-md'
-                  }`}
+                  disabled={isApplying}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold
+                    text-white
+                    bg-candidate-500 hover:bg-candidate-600
+                    dark:bg-candidate-600 dark:hover:bg-candidate-500
+                    disabled:opacity-60 disabled:pointer-events-none
+                    shadow-sm shadow-candidate-500/20
+                    hover:shadow-md hover:shadow-candidate-500/25
+                    transition-all duration-150
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-candidate-500"
                 >
                   {isApplying ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       Applying…
                     </>
-                  ) : applied ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      Applied
-                    </>
                   ) : (
                     <>
-                      Quick apply
-                      <ArrowRight className="h-3.5 w-3.5" />
+                      <Zap className="h-3.5 w-3.5" />
+                      Quick Apply
                     </>
                   )}
-                </motion.button>
-                {error && <p className="text-xs text-red-500">{error}</p>}
-              </div>
+                </button>
+              )}
             </div>
+
+            {error && (
+              <p className="mt-2 text-xs text-red-500 dark:text-red-400">{error}</p>
+            )}
           </div>
         </div>
       </Link>
-    </motion.article>
+    </motion.div>
   );
 }

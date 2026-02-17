@@ -72,15 +72,13 @@ export default function CandidateNavbar() {
 
   return (
     <>
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'py-2' : 'py-4'
-      }`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'py-2' : 'py-4'
+        }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className={`flex items-center justify-between px-4 lg:px-6 py-3 rounded-2xl transition-all duration-300 ${
-            scrolled
+          <div className={`flex items-center justify-between px-4 lg:px-6 py-3 rounded-2xl transition-all duration-300 ${scrolled
               ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg shadow-candidate-200/20 dark:shadow-black/20 border border-candidate-200/50 dark:border-gray-700/50'
               : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-md border border-candidate-200/30 dark:border-gray-700/30'
-          }`}>
+            }`}>
             {/* Logo */}
             <Link href="/candidate" className="flex items-center gap-3 group">
               <div className="relative">
@@ -106,11 +104,10 @@ export default function CandidateNavbar() {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                        active
+                      className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${active
                           ? 'text-white'
                           : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
+                        }`}
                     >
                       {active && (
                         <motion.div
@@ -164,33 +161,41 @@ export default function CandidateNavbar() {
 
               {/* Profile Dropdown */}
               <div className="relative group">
-                <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-candidate-400 to-cyan-500 flex items-center justify-center shadow-inner">
+                <button className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] hover:border-candidate-500/30 hover:bg-white/[0.08] transition-all duration-200">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-candidate-400 to-cyan-500 flex items-center justify-center ring-2 ring-candidate-500/20 shadow-sm">
                     <span className="text-sm font-bold text-white">
                       {user?.name?.charAt(0).toUpperCase() || 'U'}
                     </span>
                   </div>
-                  <span className="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300 max-w-[100px] truncate">
+                  <span className="hidden sm:block text-sm font-medium text-gray-300 max-w-[100px] truncate">
                     {user?.name?.split(' ')[0] || 'User'}
                   </span>
-                  <ChevronDown className="h-4 w-4 text-gray-400 group-hover:rotate-180 transition-transform duration-300" />
+                  <ChevronDown className="h-4 w-4 text-gray-500 group-hover:rotate-180 transition-transform duration-300" />
                 </button>
 
                 {/* Dropdown Menu */}
-                <div className="absolute right-0 top-full mt-2 w-80 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform group-hover:translate-y-0 translate-y-2">
-                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="absolute right-0 top-full mt-3 w-[320px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform group-hover:translate-y-0 translate-y-2">
+                  {/* Outer glow */}
+                  <div className="absolute -inset-px rounded-2xl bg-gradient-to-b from-candidate-500/20 via-transparent to-cyan-500/10 pointer-events-none" />
+                  <div className="relative bg-gray-900/95 backdrop-blur-2xl rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden">
                     {/* Profile Header */}
-                    <div className="p-4 bg-gradient-to-br from-candidate-500/10 to-cyan-500/10 dark:from-candidate-500/5 dark:to-cyan-500/5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-candidate-400 to-cyan-500 flex items-center justify-center shadow-lg">
-                          <span className="text-2xl font-bold text-white">
-                            {user?.name?.charAt(0).toUpperCase() || 'U'}
-                          </span>
+                    <div className="relative p-5 pb-4">
+                      {/* Subtle gradient overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-candidate-500/[0.06] via-transparent to-cyan-500/[0.04]" />
+                      <div className="relative flex items-center gap-4">
+                        {/* Avatar with gradient ring */}
+                        <div className="relative">
+                          <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-candidate-400 to-cyan-500 opacity-60 blur-sm" />
+                          <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-candidate-400 to-cyan-500 flex items-center justify-center ring-2 ring-white/10">
+                            <span className="text-2xl font-bold text-white">
+                              {user?.name?.charAt(0).toUpperCase() || 'U'}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 dark:text-white truncate">{user?.name || 'User'}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
-                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-candidate-100 dark:bg-candidate-900/30 text-candidate-600 dark:text-candidate-400 text-xs font-medium">
+                          <p className="font-semibold text-white truncate">{user?.name || 'User'}</p>
+                          <p className="text-sm text-gray-400 truncate">{user?.email}</p>
+                          <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-0.5 rounded-full bg-candidate-500/10 border border-candidate-500/20 text-candidate-400 text-xs font-medium">
                             <Sparkles className="h-3 w-3" />
                             Job Seeker
                           </span>
@@ -198,58 +203,67 @@ export default function CandidateNavbar() {
                       </div>
                     </div>
 
+                    {/* Separator */}
+                    <div className="mx-4 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+
                     {/* Menu Items */}
-                    <div className="p-2">
+                    <div className="p-2 space-y-0.5">
                       <Link
                         href="/candidate/profile"
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group/item"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 hover:bg-white/[0.06] transition-all duration-150 group/item"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center group-hover/item:bg-candidate-100 dark:group-hover/item:bg-candidate-900/30 transition-colors">
-                          <User className="h-5 w-5 text-gray-500 group-hover/item:text-candidate-600 dark:group-hover/item:text-candidate-400" />
+                        <div className="w-9 h-9 rounded-lg bg-candidate-500/10 border border-candidate-500/20 flex items-center justify-center group-hover/item:bg-candidate-500/20 group-hover/item:shadow-sm group-hover/item:shadow-candidate-500/20 transition-all">
+                          <User className="h-4 w-4 text-candidate-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">My Profile</p>
-                          <p className="text-xs text-gray-400">View and edit your profile</p>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-200 group-hover/item:text-white transition-colors">My Profile</p>
+                          <p className="text-xs text-gray-500">View and edit your profile</p>
                         </div>
+                        <ChevronDown className="h-3.5 w-3.5 text-gray-600 -rotate-90 group-hover/item:text-gray-400 group-hover/item:translate-x-0.5 transition-all" />
                       </Link>
                       <Link
                         href="/candidate/resume"
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group/item"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 hover:bg-white/[0.06] transition-all duration-150 group/item"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center group-hover/item:bg-cyan-100 dark:group-hover/item:bg-cyan-900/30 transition-colors">
-                          <FileText className="h-5 w-5 text-gray-500 group-hover/item:text-cyan-600 dark:group-hover/item:text-cyan-400" />
+                        <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center group-hover/item:bg-cyan-500/20 group-hover/item:shadow-sm group-hover/item:shadow-cyan-500/20 transition-all">
+                          <FileText className="h-4 w-4 text-cyan-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">My Resume</p>
-                          <p className="text-xs text-gray-400">Manage your resume</p>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-200 group-hover/item:text-white transition-colors">My Resume</p>
+                          <p className="text-xs text-gray-500">Manage your resume</p>
                         </div>
+                        <ChevronDown className="h-3.5 w-3.5 text-gray-600 -rotate-90 group-hover/item:text-gray-400 group-hover/item:translate-x-0.5 transition-all" />
                       </Link>
                       <Link
                         href="/candidate/applications"
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group/item"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 hover:bg-white/[0.06] transition-all duration-150 group/item"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center group-hover/item:bg-green-100 dark:group-hover/item:bg-green-900/30 transition-colors">
-                          <Briefcase className="h-5 w-5 text-gray-500 group-hover/item:text-green-600 dark:group-hover/item:text-green-400" />
+                        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover/item:bg-emerald-500/20 group-hover/item:shadow-sm group-hover/item:shadow-emerald-500/20 transition-all">
+                          <Briefcase className="h-4 w-4 text-emerald-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">Applications</p>
-                          <p className="text-xs text-gray-400">Track your job applications</p>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-200 group-hover/item:text-white transition-colors">Applications</p>
+                          <p className="text-xs text-gray-500">Track your job applications</p>
                         </div>
+                        <ChevronDown className="h-3.5 w-3.5 text-gray-600 -rotate-90 group-hover/item:text-gray-400 group-hover/item:translate-x-0.5 transition-all" />
                       </Link>
                     </div>
 
+                    {/* Separator */}
+                    <div className="mx-4 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+
                     {/* Logout */}
-                    <div className="p-2 border-t border-gray-100 dark:border-gray-800">
+                    <div className="p-2">
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/[0.08] transition-all duration-150 group/item"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-                          <LogOut className="h-5 w-5" />
+                        <div className="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center group-hover/item:bg-red-500/20 transition-all">
+                          <LogOut className="h-4 w-4" />
                         </div>
-                        <div className="text-left">
-                          <p className="text-sm font-medium">Sign Out</p>
-                          <p className="text-xs text-red-400">End your session</p>
+                        <div className="text-left flex-1">
+                          <p className="text-sm font-medium group-hover/item:text-red-300 transition-colors">Sign Out</p>
+                          <p className="text-xs text-red-500/60">End your session</p>
                         </div>
                       </button>
                     </div>
@@ -304,11 +318,10 @@ export default function CandidateNavbar() {
                       <Link
                         href={item.href}
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all ${
-                          active
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all ${active
                             ? 'bg-gradient-to-r from-candidate-500 to-cyan-500 text-white shadow-lg'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                        }`}
+                          }`}
                       >
                         <Icon className="h-5 w-5" />
                         {item.label}
@@ -317,7 +330,7 @@ export default function CandidateNavbar() {
                   );
                 })}
               </div>
-              
+
               <div className="p-4 border-t border-gray-100 dark:border-gray-800">
                 <Link
                   href="/candidate/profile"

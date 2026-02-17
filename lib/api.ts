@@ -39,35 +39,35 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getAuthToken();
-  
+
   const headers: HeadersInit = {
     ...options.headers,
   };
-  
+
   // Add auth token if available
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
-  
+
   // Add content-type for JSON requests
   if (options.body && typeof options.body === 'string') {
     (headers as Record<string, string>)['Content-Type'] = 'application/json';
   }
-  
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   });
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
-  
+
   // Handle empty responses
   const text = await response.text();
   if (!text) return {} as T;
-  
+
   return JSON.parse(text);
 }
 
@@ -104,7 +104,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
-  
+
   setAuthToken(response.access_token);
   return response;
 }
@@ -119,7 +119,7 @@ export async function register(
     method: 'POST',
     body: JSON.stringify({ name, email, password, role }),
   });
-  
+
   // Only set token if account is approved (candidates get tokens immediately)
   if (response.access_token) {
     setAuthToken(response.access_token);
@@ -165,9 +165,9 @@ export interface ResumeResponse {
 export async function uploadResume(file: File): Promise<ResumeResponse> {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const token = getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/resumes/upload`, {
     method: 'POST',
     headers: {
@@ -175,21 +175,21 @@ export async function uploadResume(file: File): Promise<ResumeResponse> {
     },
     body: formData,
   });
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
     throw new Error(error.detail);
   }
-  
+
   return response.json();
 }
 
 export async function uploadMultipleResumes(files: File[]): Promise<ResumeResponse[]> {
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
-  
+
   const token = getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/resumes/upload/batch`, {
     method: 'POST',
     headers: {
@@ -197,12 +197,12 @@ export async function uploadMultipleResumes(files: File[]): Promise<ResumeRespon
     },
     body: formData,
   });
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
     throw new Error(error.detail);
   }
-  
+
   return response.json();
 }
 
@@ -220,17 +220,17 @@ export async function deleteResume(id: string): Promise<void> {
 
 export async function downloadResume(id: string): Promise<Blob> {
   const token = getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/resumes/${id}/download`, {
     headers: {
       'Authorization': `Bearer ${token}`,
     },
   });
-  
+
   if (!response.ok) {
     throw new Error('Failed to download resume');
   }
-  
+
   return response.blob();
 }
 
@@ -339,9 +339,9 @@ export interface InterviewResponse {
 export async function uploadInterview(resumeId: string, file: File): Promise<InterviewResponse> {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const token = getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/interviews/upload?resume_id=${resumeId}`, {
     method: 'POST',
     headers: {
@@ -349,12 +349,12 @@ export async function uploadInterview(resumeId: string, file: File): Promise<Int
     },
     body: formData,
   });
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
     throw new Error(error.detail);
   }
-  
+
   return response.json();
 }
 
@@ -437,17 +437,17 @@ export async function getCandidateReport(resumeId: string, jobId?: string): Prom
 export async function downloadReportPdf(resumeId: string, jobId?: string): Promise<Blob> {
   const token = getAuthToken();
   const query = jobId ? `?job_id=${jobId}` : '';
-  
+
   const response = await fetch(`${API_BASE_URL}/reports/${resumeId}/pdf${query}`, {
     headers: {
       'Authorization': `Bearer ${token}`,
     },
   });
-  
+
   if (!response.ok) {
     throw new Error('Failed to download PDF');
   }
-  
+
   return response.blob();
 }
 
@@ -551,6 +551,12 @@ export async function withdrawApplication(id: string): Promise<{ message: string
   });
 }
 
+export async function deleteApplication(id: string): Promise<{ message: string }> {
+  return apiRequest(`/candidate/applications/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getCandidateResume(): Promise<any> {
   return apiRequest('/candidate/resume');
 }
@@ -558,9 +564,9 @@ export async function getCandidateResume(): Promise<any> {
 export async function uploadCandidateResume(file: File): Promise<any> {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const token = getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/candidate/resume`, {
     method: 'POST',
     headers: {
@@ -568,12 +574,12 @@ export async function uploadCandidateResume(file: File): Promise<any> {
     },
     body: formData,
   });
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
     throw new Error(error.detail);
   }
-  
+
   return response.json();
 }
 
@@ -666,7 +672,7 @@ export async function getAllUsers(
   if (filters?.role) params.append('role', filters.role);
   if (filters?.account_status) params.append('account_status', filters.account_status);
   if (filters?.search) params.append('search', filters.search);
-  
+
   const query = params.toString();
   return apiRequest(`/admin/users${query ? `?${query}` : ''}`);
 }

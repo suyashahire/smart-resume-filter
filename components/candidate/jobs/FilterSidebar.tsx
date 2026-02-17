@@ -9,9 +9,9 @@ import {
   Globe,
   DollarSign,
   X,
-  Bookmark,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export interface JobFilters {
@@ -36,9 +36,6 @@ const WORK_MODES = [
   { value: 'onsite', label: 'On-site' },
 ];
 
-const CARD_CLASS =
-  'rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-sm';
-
 interface FilterSidebarProps {
   filters: JobFilters;
   onChange: (filters: JobFilters) => void;
@@ -50,6 +47,7 @@ interface FilterSidebarProps {
   className?: string;
 }
 
+/* ── Collapsible filter section ── */
 function FilterSection({
   title,
   icon: Icon,
@@ -63,21 +61,21 @@ function FilterSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+    <div className="border-b border-gray-100 dark:border-gray-800/60 last:border-0">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 py-3 text-left"
+        className="w-full flex items-center justify-between gap-2 py-3.5 text-left group"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
-          <Icon className="h-4 w-4 text-candidate-500 dark:text-candidate-400" />
+        <span className="flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+          <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-candidate-500/8 dark:bg-candidate-500/15 flex items-center justify-center">
+            <Icon className="h-3.5 w-3.5 text-candidate-600 dark:text-candidate-400" />
+          </span>
           {title}
         </span>
-        {open ? (
-          <ChevronUp className="h-4 w-4 text-gray-400" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-gray-400" />
-        )}
+        <span className="text-gray-300 dark:text-gray-600 group-hover:text-gray-400 dark:group-hover:text-gray-500 transition-colors">
+          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </span>
       </button>
       <AnimatePresence>
         {open && (
@@ -88,7 +86,7 @@ function FilterSection({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            {children}
+            <div className="pb-3.5">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -96,34 +94,31 @@ function FilterSection({
   );
 }
 
+/* ── Pill option ── */
 function PillOption({
-  value,
   label,
   isActive,
   onClick,
 }: {
-  value: string;
   label: string;
   isActive: boolean;
   onClick: () => void;
 }) {
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-        isActive
-          ? 'bg-candidate-500 text-white shadow-sm shadow-candidate-500/25'
-          : 'bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/80 hover:text-gray-900 dark:hover:text-white'
-      }`}
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${isActive
+          ? 'bg-candidate-500 text-white shadow-sm shadow-candidate-500/25 ring-1 ring-candidate-500/30'
+          : 'bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-white border border-gray-100 dark:border-gray-700/40'
+        }`}
     >
       {label}
-    </motion.button>
+    </button>
   );
 }
 
+/* ── Main sidebar ── */
 export default function FilterSidebar({
   filters,
   onChange,
@@ -138,126 +133,142 @@ export default function FilterSidebar({
     onChange({ ...filters, [key]: value });
   };
 
+  const activeCount = [
+    filters.jobType,
+    filters.location,
+    filters.experience,
+    filters.workMode !== 'all' ? filters.workMode : '',
+    filters.salaryRange,
+  ].filter(Boolean).length;
+
   return (
-    <div className={`${CARD_CLASS} p-4 ${className}`}>
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <span className="text-sm font-semibold text-gray-900 dark:text-white">Filters</span>
-        {hasActiveFilters && (
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            type="button"
-            onClick={onClearFilters}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-candidate-600 dark:text-candidate-400 hover:bg-candidate-500/10 dark:hover:bg-candidate-500/20 transition-colors"
-          >
-            <X className="h-3.5 w-3.5" />
-            Clear filters
-          </motion.button>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <FilterSection title="Job type" icon={Briefcase}>
-          <div className="flex flex-wrap gap-2 pb-3">
-            {JOB_TYPES.map((opt) => (
-              <PillOption
-                key={opt.value || 'all'}
-                value={opt.value}
-                label={opt.label}
-                isActive={filters.jobType === opt.value}
-                onClick={() => update('jobType', opt.value)}
-              />
-            ))}
-          </div>
-        </FilterSection>
-
-        <FilterSection title="Location" icon={MapPin}>
-          <div className="flex flex-wrap gap-2 pb-3">
-            <PillOption
-              value=""
-              label="All locations"
-              isActive={filters.location === ''}
-              onClick={() => update('location', '')}
-            />
-            {locations.slice(0, 10).map((loc) => (
-              <PillOption
-                key={loc}
-                value={loc}
-                label={loc}
-                isActive={filters.location === loc}
-                onClick={() => update('location', loc)}
-              />
-            ))}
-            {locations.length > 10 && (
-              <span className="text-xs text-gray-500 px-2 py-1">+{locations.length - 10} more</span>
+    <div
+      className={`rounded-2xl border border-gray-200/50 dark:border-gray-700/50
+        bg-white/80 dark:bg-gray-900/60 backdrop-blur-lg shadow-sm ${className}`}
+    >
+      <div className="p-4 sm:p-5">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+            <SlidersHorizontal className="h-4 w-4 text-candidate-500" />
+            Filters
+            {activeCount > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-candidate-500 text-[10px] font-bold text-white">
+                {activeCount}
+              </span>
             )}
-          </div>
-        </FilterSection>
+          </span>
+          {hasActiveFilters && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium
+                text-candidate-600 dark:text-candidate-400
+                hover:bg-candidate-500/10 dark:hover:bg-candidate-500/20
+                transition-colors"
+            >
+              <X className="h-3 w-3" />
+              Clear all
+            </motion.button>
+          )}
+        </div>
 
-        <FilterSection title="Experience" icon={TrendingUp}>
-          <div className="flex flex-wrap gap-2 pb-3">
-            <PillOption
-              value=""
-              label="Any"
-              isActive={filters.experience === ''}
-              onClick={() => update('experience', '')}
-            />
-            {experienceOptions.map((exp) => (
-              <PillOption
-                key={exp}
-                value={exp}
-                label={exp}
-                isActive={filters.experience === exp}
-                onClick={() => update('experience', exp)}
-              />
-            ))}
-          </div>
-        </FilterSection>
-
-        <FilterSection title="Remote / On-site" icon={Globe}>
-          <div className="flex flex-wrap gap-2 pb-3">
-            {WORK_MODES.map((opt) => (
-              <PillOption
-                key={opt.value}
-                value={opt.value}
-                label={opt.label}
-                isActive={filters.workMode === opt.value}
-                onClick={() => update('workMode', opt.value)}
-              />
-            ))}
-          </div>
-        </FilterSection>
-
-        {salaryOptions.length > 0 && (
-          <FilterSection title="Salary range" icon={DollarSign}>
-            <div className="flex flex-wrap gap-2 pb-3">
-              <PillOption
-                value=""
-                label="Any"
-                isActive={filters.salaryRange === ''}
-                onClick={() => update('salaryRange', '')}
-              />
-              {salaryOptions.map((range) => (
+        <div className="mt-2">
+          {/* Job type */}
+          <FilterSection title="Job type" icon={Briefcase}>
+            <div className="flex flex-wrap gap-1.5">
+              {JOB_TYPES.map((opt) => (
                 <PillOption
-                  key={range}
-                  value={range}
-                  label={range}
-                  isActive={filters.salaryRange === range}
-                  onClick={() => update('salaryRange', range)}
+                  key={opt.value || 'all'}
+                  label={opt.label}
+                  isActive={filters.jobType === opt.value}
+                  onClick={() => update('jobType', opt.value)}
                 />
               ))}
             </div>
           </FilterSection>
-        )}
-      </div>
 
-      <a
-        href="/candidate/jobs"
-        className="mt-4 flex items-center gap-2 text-xs font-medium text-candidate-600 dark:text-candidate-400 hover:underline"
-      >
-        <Bookmark className="h-3.5 w-3.5" />
-        Saved searches
-      </a>
+          {/* Location */}
+          <FilterSection title="Location" icon={MapPin}>
+            <div className="flex flex-wrap gap-1.5">
+              <PillOption
+                label="All locations"
+                isActive={filters.location === ''}
+                onClick={() => update('location', '')}
+              />
+              {locations.slice(0, 10).map((loc) => (
+                <PillOption
+                  key={loc}
+                  label={loc}
+                  isActive={filters.location === loc}
+                  onClick={() => update('location', loc)}
+                />
+              ))}
+              {locations.length > 10 && (
+                <span className="text-[11px] text-gray-400 px-2 py-1 self-center">
+                  +{locations.length - 10} more
+                </span>
+              )}
+            </div>
+          </FilterSection>
+
+          {/* Experience */}
+          <FilterSection title="Experience" icon={TrendingUp}>
+            <div className="flex flex-wrap gap-1.5">
+              <PillOption
+                label="Any"
+                isActive={filters.experience === ''}
+                onClick={() => update('experience', '')}
+              />
+              {experienceOptions.map((exp) => (
+                <PillOption
+                  key={exp}
+                  label={exp}
+                  isActive={filters.experience === exp}
+                  onClick={() => update('experience', exp)}
+                />
+              ))}
+            </div>
+          </FilterSection>
+
+          {/* Work mode */}
+          <FilterSection title="Work mode" icon={Globe}>
+            <div className="flex flex-wrap gap-1.5">
+              {WORK_MODES.map((opt) => (
+                <PillOption
+                  key={opt.value}
+                  label={opt.label}
+                  isActive={filters.workMode === opt.value}
+                  onClick={() => update('workMode', opt.value)}
+                />
+              ))}
+            </div>
+          </FilterSection>
+
+          {/* Salary */}
+          {salaryOptions.length > 0 && (
+            <FilterSection title="Salary range" icon={DollarSign}>
+              <div className="flex flex-wrap gap-1.5">
+                <PillOption
+                  label="Any"
+                  isActive={filters.salaryRange === ''}
+                  onClick={() => update('salaryRange', '')}
+                />
+                {salaryOptions.map((range) => (
+                  <PillOption
+                    key={range}
+                    label={range}
+                    isActive={filters.salaryRange === range}
+                    onClick={() => update('salaryRange', range)}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Briefcase, SlidersHorizontal } from 'lucide-react';
 import { getOpenJobs, getCandidateApplications } from '@/lib/api';
 import {
   SearchBar,
@@ -155,57 +155,76 @@ export default function CandidateJobsPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="fixed inset-0 bg-gray-100 dark:bg-gray-950 -z-10" />
-      <div
-        className="fixed inset-0 -z-10 pointer-events-none bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(20,184,166,0.06),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(20,184,166,0.04),transparent)]"
-        aria-hidden
-      />
+      {/* Background */}
+      <div className="fixed inset-0 bg-gray-50 dark:bg-gray-950 -z-10" />
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(20,184,166,0.07),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(20,184,166,0.05),transparent)]" />
+      </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* ═══ HEADER ═══ */}
         <motion.header
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           className="mb-6"
         >
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-1">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider bg-candidate-500/10 dark:bg-candidate-500/15 text-candidate-600 dark:text-candidate-400 border border-candidate-500/15 dark:border-candidate-500/25 mb-3">
+            <Search className="h-3 w-3" />
+            Job Board
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
             Browse Jobs
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Find your perfect opportunity from {jobs.length} open position{jobs.length !== 1 ? 's' : ''}.
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Find your perfect opportunity from{' '}
+            <span className="font-semibold text-gray-700 dark:text-gray-300">{jobs.length}</span>{' '}
+            open position{jobs.length !== 1 ? 's' : ''}.
           </p>
         </motion.header>
 
-        {/* Sticky search hero + filters area */}
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700/80 to-transparent mb-6" aria-hidden />
+
+        {/* ═══ STICKY SEARCH ═══ */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
           className="sticky top-20 z-20 mb-6"
         >
-          <div className="rounded-2xl border border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-sm p-4 sm:p-5 space-y-4">
+          <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/60 backdrop-blur-lg shadow-sm p-4 sm:p-5 space-y-3">
             <SearchBar
               value={searchTerm}
               onChange={setSearchTerm}
               placeholder="Search jobs, skills, or keywords…"
             />
-            {/* Mobile: Filters toggle */}
+
+            {/* Mobile filters toggle */}
             <div className="lg:hidden">
               <button
                 type="button"
                 onClick={() => setMobileFiltersOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 text-sm font-medium text-gray-900 dark:text-white"
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl
+                  border border-gray-200/50 dark:border-gray-700/50
+                  bg-white/70 dark:bg-gray-900/50
+                  text-sm font-medium text-gray-900 dark:text-white
+                  transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/60"
               >
-                Filters
-                {hasActiveFilters && (
-                  <span className="px-1.5 py-0.5 rounded-md bg-candidate-500/20 text-candidate-600 dark:text-candidate-400 text-xs">
-                    Active
-                  </span>
-                )}
+                <span className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-candidate-500" />
+                  Filters
+                  {hasActiveFilters && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-candidate-500/20 text-candidate-600 dark:text-candidate-400 text-[11px] font-semibold">
+                      Active
+                    </span>
+                  )}
+                </span>
                 {mobileFiltersOpen ? (
-                  <ChevronUp className="h-4 w-4" />
+                  <ChevronUp className="h-4 w-4 text-gray-400" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
                 )}
               </button>
               <AnimatePresence>
@@ -232,34 +251,39 @@ export default function CandidateJobsPage() {
           </div>
         </motion.div>
 
-        {/* Result count */}
+        {/* ═══ RESULT COUNT BAR ═══ */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="flex items-center justify-between gap-4 mb-4"
+          className="flex items-center justify-between gap-4 mb-5"
         >
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {filteredJobs.length} of {jobs.length} job{jobs.length !== 1 ? 's' : ''}
+            Showing{' '}
+            <span className="font-semibold text-gray-700 dark:text-gray-300">
+              {filteredJobs.length}
+            </span>{' '}
+            of {jobs.length} job{jobs.length !== 1 ? 's' : ''}
           </p>
           {hasActiveFilters && (
             <button
               type="button"
               onClick={clearFilters}
-              className="text-sm font-medium text-candidate-600 dark:text-candidate-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-candidate-500 rounded"
+              className="text-xs font-semibold text-candidate-600 dark:text-candidate-400
+                hover:text-candidate-700 dark:hover:text-candidate-300
+                transition-colors
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-candidate-500 rounded"
             >
               Clear filters
             </button>
           )}
         </motion.div>
 
-        <div className="h-px bg-gray-200/80 dark:bg-gray-700/80 mb-6" aria-hidden />
-
-        {/* Two-column: sidebar + results */}
+        {/* ═══ TWO-COLUMN LAYOUT ═══ */}
         <div className="lg:grid lg:grid-cols-12 lg:gap-8">
-          {/* Left: Filter sidebar (desktop only) */}
+          {/* Left: Filters (desktop) */}
           <aside className="hidden lg:block lg:col-span-4 xl:col-span-3">
-            <div className="lg:sticky lg:top-40">
+            <div className="lg:sticky lg:top-44">
               <FilterSidebar
                 filters={filters}
                 onChange={setFilters}

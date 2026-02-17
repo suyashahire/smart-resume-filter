@@ -10,9 +10,11 @@ import {
   Clock,
   MessageSquare,
   AlertTriangle,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { ApplicationTimeline } from '@/components/candidate';
-import { getApplicationDetail, withdrawApplication } from '@/lib/api';
+import { getApplicationDetail, withdrawApplication, deleteApplication } from '@/lib/api';
 
 export default function ApplicationDetailPage() {
   const params = useParams();
@@ -22,7 +24,9 @@ export default function ApplicationDetailPage() {
   const [application, setApplication] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -47,14 +51,22 @@ export default function ApplicationDetailPage() {
     setIsWithdrawing(true);
     try {
       await withdrawApplication(applicationId);
-      // Refresh application data
-      const data = await getApplicationDetail(applicationId);
-      setApplication(data);
-      setShowWithdrawConfirm(false);
+      // Application is deleted — redirect back to list
+      router.push('/candidate/applications');
     } catch (err: any) {
       setError(err.message || 'Failed to withdraw application');
-    } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteApplication(applicationId);
+      router.push('/candidate/applications');
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete application');
+      setIsDeleting(false);
     }
   };
 
@@ -74,6 +86,7 @@ export default function ApplicationDetailPage() {
   };
 
   const canWithdraw = application && !['hired', 'withdrawn', 'rejected'].includes(application.status);
+  const canDelete = application && ['withdrawn', 'rejected'].includes(application.status);
 
   if (isLoading) {
     return (
@@ -166,6 +179,15 @@ export default function ApplicationDetailPage() {
               <span>Withdraw Application</span>
             </button>
           )}
+          {canDelete && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 border border-red-300 text-red-600 dark:border-red-800 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete Application</span>
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -239,16 +261,22 @@ export default function ApplicationDetailPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full"
           >
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Withdraw Application?
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Are you sure you want to withdraw your application for{' '}
-              <strong>{application.job_title}</strong>? This action cannot be undone.
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Withdraw Application?
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 ml-[52px]">
+              This will permanently withdraw and remove your application for{' '}
+              <strong>{application.job_title}</strong>. You can reapply later if the role is still open.
             </p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowWithdrawConfirm(false)}
+                disabled={isWithdrawing}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 Cancel
@@ -256,9 +284,59 @@ export default function ApplicationDetailPage() {
               <button
                 onClick={handleWithdraw}
                 disabled={isWithdrawing}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                {isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
+                {isWithdrawing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Withdrawing...
+                  </>
+                ) : 'Withdraw'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Delete Application?
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 ml-[52px]">
+              This will permanently delete your application for{' '}
+              <strong>{application.job_title}</strong>. This action can&apos;t be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : 'Delete'}
               </button>
             </div>
           </motion.div>
