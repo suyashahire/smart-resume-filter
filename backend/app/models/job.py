@@ -86,6 +86,7 @@ class JobDescriptionResponse(BaseModel):
     job_type: str
     is_active: bool
     candidates_screened: int
+    company: Optional[str] = None
     created_at: datetime
     
     class Config:

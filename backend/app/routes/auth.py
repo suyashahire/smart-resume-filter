@@ -158,6 +158,7 @@ async def register(user_data: UserCreate):
         email=user_data.email,
         password_hash=hashed_password,
         role=user_data.role,
+        company=user_data.company,
         account_status=account_status,
         is_active=is_active
     )
@@ -176,6 +177,7 @@ async def register(user_data: UserCreate):
                 role=user.role,
                 is_active=user.is_active,
                 account_status=user.account_status,
+                company=user.company,
                 created_at=user.created_at,
                 last_login=user.last_login
             )
@@ -193,6 +195,7 @@ async def register(user_data: UserCreate):
             role=user.role,
             is_active=user.is_active,
             account_status=user.account_status,
+            company=user.company,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -252,6 +255,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             role=user.role,
             is_active=user.is_active,
             account_status=user.account_status,
+            company=user.company,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -310,6 +314,7 @@ async def login_json(login_data: UserLogin):
             role=user.role,
             is_active=user.is_active,
             account_status=user.account_status,
+            company=user.company,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -326,6 +331,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         role=current_user.role,
         is_active=current_user.is_active,
         account_status=current_user.account_status,
+        company=current_user.company,
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )
@@ -350,6 +356,9 @@ async def update_current_user(
             )
         current_user.email = user_update.email
     
+    if user_update.company is not None:
+        current_user.company = user_update.company
+    
     current_user.updated_at = datetime.utcnow()
     await current_user.save()
     
@@ -360,6 +369,7 @@ async def update_current_user(
         role=current_user.role,
         is_active=current_user.is_active,
         account_status=current_user.account_status,
+        company=current_user.company,
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )

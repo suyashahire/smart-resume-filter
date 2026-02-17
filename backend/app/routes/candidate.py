@@ -73,6 +73,7 @@ async def get_open_jobs(
             job_type=job.job_type,
             is_active=job.is_active,
             candidates_screened=job.candidates_screened,
+            company=job.company,
             created_at=job.created_at,
         )
         for job in jobs
@@ -107,6 +108,7 @@ async def get_job_detail(job_id: str):
         job_type=job.job_type,
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
+        company=job.company,
         created_at=job.created_at,
     )
 

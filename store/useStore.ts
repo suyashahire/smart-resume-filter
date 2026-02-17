@@ -85,6 +85,7 @@ export interface User {
   email: string;
   role: string;
   account_status?: string;
+  company?: string;
 }
 
 // Candidate Portal Interfaces
@@ -147,17 +148,17 @@ interface StoreState {
   setResumes: (resumes: Resume[]) => void;
   setFilteredResumes: (resumes: Resume[]) => void;
   clearAllData: () => void;
-  
+
   // Shortlist
   shortlistedIds: Set<string>;
   toggleShortlist: (id: string) => void;
   isShortlisted: (id: string) => boolean;
   clearShortlist: () => void;
-  
+
   // Job Description (legacy - single job)
   jobDescription: JobDescription | null;
   setJobDescription: (jd: JobDescription) => void;
-  
+
   // Multi-Job Support
   jobs: Job[];
   currentJobId: string | null;
@@ -173,12 +174,12 @@ interface StoreState {
   getCandidatesForJob: (jobId: string) => CandidateJobAssignment[];
   getJobsForCandidate: (candidateId: string) => CandidateJobAssignment[];
   getCurrentJob: () => Job | null;
-  
+
   // Interview data
   interviews: Interview[];
   addInterview: (interview: Interview) => void;
   getInterviewByCandidate: (candidateId: string) => Interview | undefined;
-  
+
   // Authentication
   user: User | null;
   authToken: string | null;
@@ -187,38 +188,38 @@ interface StoreState {
   setAuthToken: (token: string | null) => void;
   setIsAuthenticated: (auth: boolean) => void;
   logout: () => void;
-  
+
   // API Configuration
   useRealApi: boolean;
   setUseRealApi: (use: boolean) => void;
-  
+
   // UI state
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
-  
+
   // Error handling
   error: string | null;
   setError: (error: string | null) => void;
-  
+
   // Hydration tracking (for SSR/client reconciliation)
   isHydrated: boolean;
   setIsHydrated: (hydrated: boolean) => void;
-  
+
   // Session-level data fetch tracking (reset on logout)
   hasFetchedSessionData: boolean;
   setHasFetchedSessionData: (fetched: boolean) => void;
-  
+
   // Candidate Portal state
   candidateApplications: CandidateApplication[];
   setCandidateApplications: (apps: CandidateApplication[]) => void;
-  
+
   // Messaging state
   conversations: ChatConversation[];
   currentConversationMessages: ChatMessage[];
   setConversations: (convs: ChatConversation[]) => void;
   setCurrentConversationMessages: (msgs: ChatMessage[]) => void;
   addMessage: (msg: ChatMessage) => void;
-  
+
   // Candidate Notes & Tags
   candidateNotes: Record<string, CandidateNote[]>;
   candidateTags: Record<string, string[]>;
@@ -230,7 +231,7 @@ interface StoreState {
   removeTagFromCandidate: (candidateId: string, tagId: string) => void;
   createTag: (label: string, color: string) => CandidateTag;
   deleteTag: (tagId: string) => void;
-  
+
   // Activity Feed
   activities: Activity[];
   addActivity: (activity: Omit<Activity, 'id' | 'timestamp'>) => void;
@@ -271,7 +272,7 @@ export const useStore = create<StoreState>()(
       candidateApplications: [],
       conversations: [],
       currentConversationMessages: [],
-      
+
       // Resume actions
       addResume: (resume) => set((state) => {
         // Prevent duplicates by checking if resume with same ID already exists
@@ -286,26 +287,26 @@ export const useStore = create<StoreState>()(
           resumes: [...state.resumes, resume]
         };
       }),
-      
+
       removeResume: (id) => set((state) => ({
         resumes: state.resumes.filter(r => r.id !== id),
         filteredResumes: state.filteredResumes.filter(r => r.id !== id)
       })),
-      
+
       setResumes: (resumes) => {
         // Efficient O(n) deduplication using Map
         const seen = new Map<string, Resume>();
         resumes.forEach(r => seen.set(r.id, r));
         return set({ resumes: Array.from(seen.values()) });
       },
-      
+
       setFilteredResumes: (resumes) => {
         // Efficient O(n) deduplication using Map
         const seen = new Map<string, Resume>();
         resumes.forEach(r => seen.set(r.id, r));
         return set({ filteredResumes: Array.from(seen.values()) });
       },
-      
+
       clearAllData: () => set({
         resumes: [],
         filteredResumes: [],
@@ -313,7 +314,7 @@ export const useStore = create<StoreState>()(
         interviews: [],
         shortlistedIds: new Set<string>()
       }),
-      
+
       // Shortlist actions
       toggleShortlist: (id) => set((state) => {
         const newSet = new Set(state.shortlistedIds);
@@ -324,42 +325,42 @@ export const useStore = create<StoreState>()(
         }
         return { shortlistedIds: newSet };
       }),
-      
+
       isShortlisted: (id) => {
         return get().shortlistedIds.has(id);
       },
-      
+
       clearShortlist: () => set({ shortlistedIds: new Set<string>() }),
-      
+
       // Job Description actions (legacy)
       setJobDescription: (jd) => set({ jobDescription: jd }),
-      
+
       // Multi-Job actions
       addJob: (job) => set((state) => ({
         jobs: [...state.jobs, job]
       })),
-      
+
       updateJob: (id, updates) => set((state) => ({
         jobs: state.jobs.map(j => j.id === id ? { ...j, ...updates } : j)
       })),
-      
+
       deleteJob: (id) => set((state) => ({
         jobs: state.jobs.filter(j => j.id !== id),
         candidateJobAssignments: state.candidateJobAssignments.filter(a => a.jobId !== id),
         currentJobId: state.currentJobId === id ? null : state.currentJobId
       })),
-      
+
       setJobs: (jobs) => set({ jobs }),
-      
+
       setCurrentJobId: (id) => set({ currentJobId: id }),
-      
+
       assignCandidateToJob: (candidateId, jobId, score = 0) => set((state) => {
         // Check if already assigned
         const exists = state.candidateJobAssignments.some(
           a => a.candidateId === candidateId && a.jobId === jobId
         );
         if (exists) return state;
-        
+
         const assignment: CandidateJobAssignment = {
           candidateId,
           jobId,
@@ -367,23 +368,23 @@ export const useStore = create<StoreState>()(
           status: 'new',
           assignedAt: new Date().toISOString()
         };
-        
+
         // Update job candidate count
-        const updatedJobs = state.jobs.map(j => 
+        const updatedJobs = state.jobs.map(j =>
           j.id === jobId ? { ...j, candidateCount: j.candidateCount + 1 } : j
         );
-        
+
         return {
           candidateJobAssignments: [...state.candidateJobAssignments, assignment],
           jobs: updatedJobs
         };
       }),
-      
+
       unassignCandidateFromJob: (candidateId, jobId) => set((state) => {
-        const updatedJobs = state.jobs.map(j => 
+        const updatedJobs = state.jobs.map(j =>
           j.id === jobId ? { ...j, candidateCount: Math.max(0, j.candidateCount - 1) } : j
         );
-        
+
         return {
           candidateJobAssignments: state.candidateJobAssignments.filter(
             a => !(a.candidateId === candidateId && a.jobId === jobId)
@@ -391,7 +392,7 @@ export const useStore = create<StoreState>()(
           jobs: updatedJobs
         };
       }),
-      
+
       updateCandidateJobStatus: (candidateId, jobId, status) => set((state) => ({
         candidateJobAssignments: state.candidateJobAssignments.map(a =>
           a.candidateId === candidateId && a.jobId === jobId
@@ -399,32 +400,32 @@ export const useStore = create<StoreState>()(
             : a
         )
       })),
-      
+
       getCandidatesForJob: (jobId) => {
         return get().candidateJobAssignments.filter(a => a.jobId === jobId);
       },
-      
+
       getJobsForCandidate: (candidateId) => {
         return get().candidateJobAssignments.filter(a => a.candidateId === candidateId);
       },
-      
+
       getCurrentJob: () => {
         const { jobs, currentJobId } = get();
         return jobs.find(j => j.id === currentJobId) || null;
       },
-      
+
       // Interview actions
-      addInterview: (interview) => set((state) => ({ 
-        interviews: [...state.interviews, interview] 
+      addInterview: (interview) => set((state) => ({
+        interviews: [...state.interviews, interview]
       })),
-      
+
       getInterviewByCandidate: (candidateId) => {
         return get().interviews.find(i => i.candidateId === candidateId);
       },
-      
+
       // Authentication actions
       setUser: (user) => set({ user }),
-      
+
       setAuthToken: (token) => {
         set({ authToken: token });
         // Also store in localStorage for API client
@@ -436,9 +437,9 @@ export const useStore = create<StoreState>()(
           }
         }
       },
-      
+
       setIsAuthenticated: (auth) => set({ isAuthenticated: auth }),
-      
+
       logout: () => {
         // Clear localStorage
         if (typeof window !== 'undefined') {
@@ -446,8 +447,8 @@ export const useStore = create<StoreState>()(
           // Also clear the persisted zustand storage to prevent stale data on re-login
           localStorage.removeItem('hireq-storage');
         }
-        set({ 
-          user: null, 
+        set({
+          user: null,
           authToken: null,
           isAuthenticated: false,
           resumes: [],
@@ -465,32 +466,32 @@ export const useStore = create<StoreState>()(
           hasFetchedSessionData: false
         });
       },
-      
+
       // API Configuration
       setUseRealApi: (use) => set({ useRealApi: use }),
-      
+
       // UI state actions
       setIsLoading: (loading) => set({ isLoading: loading }),
-      
+
       // Error handling
       setError: (error) => set({ error }),
-      
+
       // Hydration tracking
       setIsHydrated: (hydrated) => set({ isHydrated: hydrated }),
-      
+
       // Session-level data fetch tracking
       setHasFetchedSessionData: (fetched) => set({ hasFetchedSessionData: fetched }),
-      
+
       // Candidate Portal actions
       setCandidateApplications: (apps) => set({ candidateApplications: apps }),
-      
+
       // Messaging actions
       setConversations: (convs) => set({ conversations: convs }),
       setCurrentConversationMessages: (msgs) => set({ currentConversationMessages: msgs }),
       addMessage: (msg) => set((state) => ({
         currentConversationMessages: [...state.currentConversationMessages, msg]
       })),
-      
+
       // Candidate Notes actions
       addCandidateNote: (candidateId, content) => set((state) => {
         const note: CandidateNote = {
@@ -507,19 +508,19 @@ export const useStore = create<StoreState>()(
           }
         };
       }),
-      
+
       updateCandidateNote: (candidateId, noteId, content) => set((state) => {
         const existingNotes = state.candidateNotes[candidateId] || [];
         return {
           candidateNotes: {
             ...state.candidateNotes,
-            [candidateId]: existingNotes.map(n => 
+            [candidateId]: existingNotes.map(n =>
               n.id === noteId ? { ...n, content, updatedAt: new Date().toISOString() } : n
             )
           }
         };
       }),
-      
+
       deleteCandidateNote: (candidateId, noteId) => set((state) => {
         const existingNotes = state.candidateNotes[candidateId] || [];
         return {
@@ -529,7 +530,7 @@ export const useStore = create<StoreState>()(
           }
         };
       }),
-      
+
       // Candidate Tags actions
       addTagToCandidate: (candidateId, tagId) => set((state) => {
         const existingTags = state.candidateTags[candidateId] || [];
@@ -541,7 +542,7 @@ export const useStore = create<StoreState>()(
           }
         };
       }),
-      
+
       removeTagFromCandidate: (candidateId, tagId) => set((state) => {
         const existingTags = state.candidateTags[candidateId] || [];
         return {
@@ -551,7 +552,7 @@ export const useStore = create<StoreState>()(
           }
         };
       }),
-      
+
       createTag: (label, color) => {
         const newTag: CandidateTag = {
           id: `tag_${Date.now()}`,
@@ -563,7 +564,7 @@ export const useStore = create<StoreState>()(
         }));
         return newTag;
       },
-      
+
       deleteTag: (tagId) => set((state) => ({
         availableTags: state.availableTags.filter(t => t.id !== tagId),
         // Also remove from all candidates
@@ -574,7 +575,7 @@ export const useStore = create<StoreState>()(
           ])
         )
       })),
-      
+
       // Activity Feed actions
       addActivity: (activity) => set((state) => ({
         activities: [
@@ -586,11 +587,11 @@ export const useStore = create<StoreState>()(
           ...state.activities
         ].slice(0, 500) // Keep last 500 activities
       })),
-      
+
       getActivitiesForCandidate: (candidateId) => {
         return get().activities.filter(a => a.candidateId === candidateId);
       },
-      
+
       getRecentActivities: (limit = 20) => {
         return get().activities.slice(0, limit);
       },

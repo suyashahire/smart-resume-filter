@@ -61,7 +61,16 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    let message = `HTTP ${response.status}`;
+    if (typeof error.detail === 'string') {
+      message = error.detail;
+    } else if (Array.isArray(error.detail)) {
+      // FastAPI validation errors return detail as an array of objects
+      message = error.detail.map((e: any) => e.msg || JSON.stringify(e)).join('; ');
+    } else if (error.detail) {
+      message = JSON.stringify(error.detail);
+    }
+    throw new Error(message);
   }
 
   // Handle empty responses
@@ -94,6 +103,7 @@ export interface AuthResponse {
     role: string;
     is_active: boolean;
     account_status?: string;
+    company?: string;
     created_at: string;
     last_login: string | null;
   };
@@ -113,11 +123,12 @@ export async function register(
   name: string,
   email: string,
   password: string,
-  role: 'hr_manager' | 'candidate' = 'hr_manager'
+  role: 'hr_manager' | 'candidate' = 'hr_manager',
+  company?: string
 ): Promise<AuthResponse> {
   const response = await apiRequest<AuthResponse>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ name, email, password, role }),
+    body: JSON.stringify({ name, email, password, role, company }),
   });
 
   // Only set token if account is approved (candidates get tokens immediately)
@@ -259,6 +270,7 @@ export interface JobDescriptionResponse {
   job_type: string;
   is_active: boolean;
   candidates_screened: number;
+  company?: string;
   created_at: string;
 }
 
@@ -469,8 +481,8 @@ export async function healthCheck(): Promise<{ status: string }> {
 
 // ==================== Profile Management ====================
 
-export async function updateProfile(data: { name?: string; email?: string }): Promise<{ message: string }> {
-  return apiRequest('/auth/profile', {
+export async function updateProfile(data: { name?: string; email?: string; company?: string }): Promise<{ message: string }> {
+  return apiRequest('/auth/me', {
     method: 'PUT',
     body: JSON.stringify(data),
   });

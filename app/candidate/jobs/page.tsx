@@ -13,7 +13,7 @@ import {
   type JobFilters,
 } from '@/components/candidate/jobs';
 
-const TITLE_FILTER = 'Full Stack Developer';
+
 
 function applyFilters(
   jobs: any[],
@@ -88,10 +88,7 @@ export default function CandidateJobsPage() {
         getOpenJobs(),
         getCandidateApplications(),
       ]);
-      const filtered = (jobsData || []).filter(
-        (j: { title?: string }) => j.title?.trim() !== TITLE_FILTER
-      );
-      setJobs(filtered);
+      setJobs(jobsData || []);
       const appliedIds = new Set(
         (applicationsData.applications || []).map((a: { job_id: string }) => a.job_id)
       );

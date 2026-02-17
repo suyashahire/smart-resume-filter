@@ -33,6 +33,9 @@ class User(Document):
     role: UserRole = Field(default=UserRole.HR_MANAGER)
     is_active: bool = Field(default=True)
     
+    # Company info (for HR users)
+    company: Optional[str] = None
+    
     # Account approval (for HR accounts requiring admin approval)
     account_status: AccountStatus = Field(default=AccountStatus.APPROVED)
     rejection_reason: Optional[str] = None
@@ -57,7 +60,8 @@ class User(Document):
                 "name": "HR Manager",
                 "email": "hr@company.com",
                 "role": "hr_manager",
-                "account_status": "approved"
+                "account_status": "approved",
+                "company": "Acme Corp"
             }
         }
 
@@ -70,6 +74,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     role: UserRole = UserRole.HR_MANAGER
+    company: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -87,6 +92,7 @@ class UserResponse(BaseModel):
     is_active: bool
     account_status: AccountStatus = AccountStatus.APPROVED
     rejection_reason: Optional[str] = None
+    company: Optional[str] = None
     created_at: datetime
     last_login: Optional[datetime]
     
@@ -100,6 +106,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    company: Optional[str] = None
 
 
 class Token(BaseModel):

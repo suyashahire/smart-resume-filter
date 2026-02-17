@@ -5,24 +5,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Briefcase, Plus, Edit3, Trash2, Users, CheckCircle, Clock, Archive, Search, X, ChevronRight, Sparkles, Target, Calendar, MoreVertical, Play, Pause, Settings, Eye, FileText, Filter, BarChart3, Loader2 } from 'lucide-react';
 import { useStore, Job } from '@/store/useStore';
-import { deleteJobDescription, getJobDescriptions } from '@/lib/api';
+import { deleteJobDescription, getJobDescriptions, createJobDescription } from '@/lib/api';
 
 export default function JobsPage() {
-  const { 
-    jobs, 
-    addJob, 
-    updateJob, 
-    deleteJob, 
+  const {
+    jobs,
+    addJob,
+    updateJob,
+    deleteJob,
     setJobs,
-    currentJobId, 
-    setCurrentJobId, 
+    currentJobId,
+    setCurrentJobId,
     setJobDescription,
     candidateJobAssignments,
     filteredResumes,
     isAuthenticated,
     useRealApi,
   } = useStore();
-  
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,7 +63,7 @@ export default function JobsPage() {
       });
     return () => { cancelled = true; };
   }, [isAuthenticated, useRealApi, setJobs]);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -75,20 +75,20 @@ export default function JobsPage() {
   // Filter jobs
   const displayedJobs = useMemo(() => {
     let filtered = [...jobs];
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(j => 
+      filtered = filtered.filter(j =>
         j.title.toLowerCase().includes(query) ||
         j.description.toLowerCase().includes(query) ||
         j.requiredSkills.some(s => s.toLowerCase().includes(query))
       );
     }
-    
+
     if (statusFilter !== 'all') {
       filtered = filtered.filter(j => j.status === statusFilter);
     }
-    
+
     return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [jobs, searchQuery, statusFilter]);
 
@@ -122,14 +122,14 @@ export default function JobsPage() {
     setShowCreateModal(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const skills = formData.requiredSkills
       .split(',')
       .map(s => s.trim())
       .filter(s => s.length > 0);
-    
+
     if (editingJob) {
       updateJob(editingJob.id, {
         title: formData.title,
@@ -138,19 +138,48 @@ export default function JobsPage() {
         experience: formData.experience
       });
     } else {
-      const newJob: Job = {
-        id: `job_${Date.now()}`,
-        title: formData.title,
-        description: formData.description,
-        requiredSkills: skills,
-        experience: formData.experience,
-        status: 'draft',
-        createdAt: new Date().toISOString(),
-        candidateCount: 0
-      };
-      addJob(newJob);
+      try {
+        if (useRealApi && isAuthenticated) {
+          // Create in backend so it appears on candidate portal
+          const jobResponse = await createJobDescription({
+            title: formData.title,
+            description: formData.description,
+            experience_required: formData.experience,
+          });
+
+          const newJob: Job = {
+            id: jobResponse.id,
+            title: jobResponse.title,
+            description: jobResponse.description,
+            requiredSkills: jobResponse.required_skills || skills,
+            experience: jobResponse.experience_required || formData.experience,
+            status: 'open',
+            createdAt: jobResponse.created_at,
+            candidateCount: 0,
+          };
+          addJob(newJob);
+        } else {
+          // Offline / local-only mode
+          const newJob: Job = {
+            id: `job_${Date.now()}`,
+            title: formData.title,
+            description: formData.description,
+            requiredSkills: skills,
+            experience: formData.experience,
+            status: 'open',
+            createdAt: new Date().toISOString(),
+            candidateCount: 0
+          };
+          addJob(newJob);
+        }
+      } catch (error) {
+        console.error('Error creating job:', error);
+        const msg = error instanceof Error ? error.message : 'Failed to create job';
+        alert(msg);
+        return;
+      }
     }
-    
+
     setShowCreateModal(false);
     resetForm();
   };
@@ -223,7 +252,7 @@ export default function JobsPage() {
                 <Briefcase className="h-4 w-4" />
                 <span>Job Management</span>
               </motion.div>
-              
+
               <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-3">
                 Open <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">Positions</span>
               </h1>
@@ -231,7 +260,7 @@ export default function JobsPage() {
                 Create and manage job positions, assign candidates to roles
               </p>
             </div>
-            
+
             <motion.button
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
@@ -301,23 +330,22 @@ export default function JobsPage() {
                 </button>
               )}
             </div>
-            
+
             <div className="flex gap-2">
               {(['all', 'open', 'closed', 'draft'] as const).map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    statusFilter === status
-                      ? status === 'all' 
-                        ? 'bg-gradient-to-r from-gray-700 to-gray-800 text-white shadow-lg'
-                        : status === 'open'
+                  className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${statusFilter === status
+                    ? status === 'all'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-800 text-white shadow-lg'
+                      : status === 'open'
                         ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg'
                         : status === 'closed'
-                        ? 'bg-gradient-to-r from-gray-500 to-slate-600 text-white shadow-lg'
-                        : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg'
-                      : 'bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/80'
-                  }`}
+                          ? 'bg-gradient-to-r from-gray-500 to-slate-600 text-white shadow-lg'
+                          : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg'
+                    : 'bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700/80'
+                    }`}
                 >
                   {status.charAt(0).toUpperCase() + status.slice(1)}
                 </button>
@@ -340,7 +368,7 @@ export default function JobsPage() {
               {jobs.length === 0 ? 'No Jobs Yet' : 'No Matching Jobs'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
-              {jobs.length === 0 
+              {jobs.length === 0
                 ? 'Create your first job position to start managing candidates'
                 : 'Try adjusting your search or filters'}
             </p>
@@ -364,11 +392,10 @@ export default function JobsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(0.05 + index * 0.02, 0.3) }}
-                className={`group backdrop-blur-xl rounded-2xl border overflow-hidden transition-all duration-300 ${
-                  currentJobId === job.id
-                    ? 'bg-blue-50/80 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-500/30 shadow-xl shadow-blue-500/10'
-                    : 'bg-white/70 dark:bg-gray-900/70 border-white/50 dark:border-gray-800/50 hover:border-blue-500/30 hover:shadow-xl'
-                }`}
+                className={`group backdrop-blur-xl rounded-2xl border overflow-hidden transition-all duration-300 ${currentJobId === job.id
+                  ? 'bg-blue-50/80 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-500/30 shadow-xl shadow-blue-500/10'
+                  : 'bg-white/70 dark:bg-gray-900/70 border-white/50 dark:border-gray-800/50 hover:border-blue-500/30 hover:shadow-xl'
+                  }`}
               >
                 <div className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
@@ -386,9 +413,9 @@ export default function JobsPage() {
                           </span>
                         )}
                       </div>
-                      
+
                       <p className="text-gray-600 dark:text-gray-400 line-clamp-2">{job.description}</p>
-                      
+
                       <div className="flex flex-wrap gap-2">
                         {job.requiredSkills.slice(0, 6).map((skill, idx) => (
                           <span
@@ -404,7 +431,7 @@ export default function JobsPage() {
                           </span>
                         )}
                       </div>
-                      
+
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                         <span className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
@@ -436,7 +463,7 @@ export default function JobsPage() {
                           Set Active
                         </motion.button>
                       )}
-                      
+
                       <Link href={`/results?jobId=${job.id}`}>
                         <motion.button
                           whileHover={{ scale: 1.02 }}
@@ -447,7 +474,7 @@ export default function JobsPage() {
                           View Candidates
                         </motion.button>
                       </Link>
-                      
+
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -457,7 +484,7 @@ export default function JobsPage() {
                         <Edit3 className="h-4 w-4" />
                         Edit
                       </motion.button>
-                      
+
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}

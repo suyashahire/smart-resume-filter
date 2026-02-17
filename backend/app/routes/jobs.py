@@ -50,7 +50,8 @@ async def create_job_description(
         education_required=job_data.education_required,
         location=job_data.location,
         salary_range=job_data.salary_range,
-        job_type=job_data.job_type
+        job_type=job_data.job_type,
+        company=getattr(current_user, 'company', None),
     )
     
     await job.insert()
@@ -81,6 +82,7 @@ async def create_job_description(
         job_type=job.job_type,
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
+        company=job.company,
         created_at=job.created_at
     )
 
@@ -119,6 +121,7 @@ async def list_job_descriptions(
             job_type=job.job_type,
             is_active=job.is_active,
             candidates_screened=job.candidates_screened,
+            company=job.company,
             created_at=job.created_at
         )
         for job in jobs
@@ -158,6 +161,7 @@ async def get_job_description(
         job_type=job.job_type,
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
+        company=job.company,
         created_at=job.created_at
     )
 
@@ -209,6 +213,7 @@ async def update_job_description(
         job_type=job.job_type,
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
+        company=job.company,
         created_at=job.created_at
     )
 

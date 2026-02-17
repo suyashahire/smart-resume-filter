@@ -3,12 +3,12 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  User, Mail, Lock, Bell, Moon, Sun, Shield, Trash2, 
+import {
+  User, Mail, Lock, Bell, Moon, Sun, Shield, Trash2,
   Download, LogOut, Save, Eye, EyeOff, Check, AlertCircle,
   FileText, Briefcase, Clock, ChevronRight, KeyRound,
   Activity, Palette, Smartphone, Globe, History, Zap,
-  CheckCircle2, XCircle, AlertTriangle
+  CheckCircle2, XCircle, AlertTriangle, Building
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -94,11 +94,10 @@ function GlassInput({ icon: Icon, label, disabled = false, ...props }: { icon: a
         <input
           {...props}
           disabled={disabled}
-          className={`w-full pl-11 pr-4 py-3 rounded-xl border bg-white/[0.03] text-white placeholder-gray-500 transition-all duration-200 focus:outline-none ${
-            disabled
+          className={`w-full pl-11 pr-4 py-3 rounded-xl border bg-white/[0.03] text-white placeholder-gray-500 transition-all duration-200 focus:outline-none ${disabled
               ? 'border-white/[0.04] text-gray-500 cursor-not-allowed'
               : 'border-white/[0.08] focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:bg-white/[0.05]'
-          }`}
+            }`}
         />
       </div>
     </div>
@@ -110,19 +109,20 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const { user, isAuthenticated, logout, setUser, resumes, useRealApi } = useStore();
   const { theme, toggleTheme } = useTheme();
-  
+
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
+  const [company, setCompany] = useState(user?.company || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  
+
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [screeningAlerts, setScreeningAlerts] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(false);
-  
+
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -140,7 +140,7 @@ function ProfileContent() {
   }, [isAuthenticated, router]);
 
   useEffect(() => {
-    if (user) { setName(user.name); setEmail(user.email); }
+    if (user) { setName(user.name); setEmail(user.email); setCompany(user.company || ''); }
   }, [user]);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
@@ -153,8 +153,8 @@ function ProfileContent() {
     if (!email.trim() || !email.includes('@')) { showMsg('error', 'Please enter a valid email'); return; }
     setSaving(true);
     try {
-      if (useRealApi) await api.updateProfile({ name, email });
-      setUser({ ...user!, name, email });
+      if (useRealApi) await api.updateProfile({ name, email, company: company || undefined });
+      setUser({ ...user!, name, email, company: company || undefined });
       showMsg('success', 'Profile updated successfully');
     } catch { showMsg('error', 'Failed to update profile'); }
     finally { setSaving(false); }
@@ -226,11 +226,10 @@ function ProfileContent() {
           {message && (
             <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              className={`mb-6 p-4 rounded-xl backdrop-blur-xl border flex items-center gap-3 ${
-                message.type === 'success'
+              className={`mb-6 p-4 rounded-xl backdrop-blur-xl border flex items-center gap-3 ${message.type === 'success'
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : 'bg-red-500/10 border-red-500/20 text-red-400'
-              }`}
+                }`}
             >
               {message.type === 'success' ? <CheckCircle2 className="h-5 w-5 flex-shrink-0" /> : <XCircle className="h-5 w-5 flex-shrink-0" />}
               <span className="text-sm font-medium">{message.text}</span>
@@ -273,18 +272,16 @@ function ProfileContent() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group relative overflow-hidden ${
-                      activeTab === tab.id
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group relative overflow-hidden ${activeTab === tab.id
                         ? 'text-white'
                         : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
-                    }`}
+                      }`}
                   >
                     {activeTab === tab.id && (
                       <motion.div layoutId="activeTab" className={`absolute inset-0 bg-gradient-to-r ${tab.color} opacity-[0.12] rounded-xl`} transition={{ type: 'spring', duration: 0.5 }} />
                     )}
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                      activeTab === tab.id ? `bg-gradient-to-r ${tab.color} text-white shadow-lg` : 'bg-white/[0.06] text-gray-400 group-hover:text-gray-200'
-                    }`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${activeTab === tab.id ? `bg-gradient-to-r ${tab.color} text-white shadow-lg` : 'bg-white/[0.06] text-gray-400 group-hover:text-gray-200'
+                      }`}>
                       <tab.icon className="h-4 w-4" />
                     </div>
                     <span className="font-medium text-sm relative z-10">{tab.name}</span>
@@ -323,6 +320,7 @@ function ProfileContent() {
                     <div className="space-y-5">
                       <GlassInput icon={User} label="Full Name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
                       <GlassInput icon={Mail} label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" />
+                      <GlassInput icon={Building} label="Company Name" type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Enter your company name" />
                       <GlassInput icon={Briefcase} label="Role" type="text" value={user.role || 'Recruiter'} disabled />
 
                       <div className="pt-3">
@@ -407,13 +405,12 @@ function ProfileContent() {
                           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-amber-400 transition-colors" />
                           <input
                             type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                            className={`w-full pl-11 pr-11 py-3 rounded-xl border bg-white/[0.03] text-white placeholder-gray-500 focus:outline-none transition-all ${
-                              confirmPassword && confirmPassword !== newPassword
+                            className={`w-full pl-11 pr-11 py-3 rounded-xl border bg-white/[0.03] text-white placeholder-gray-500 focus:outline-none transition-all ${confirmPassword && confirmPassword !== newPassword
                                 ? 'border-red-500/50 focus:ring-1 focus:ring-red-500/20'
                                 : confirmPassword && confirmPassword === newPassword
-                                ? 'border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20'
-                                : 'border-white/[0.08] focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
-                            }`}
+                                  ? 'border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20'
+                                  : 'border-white/[0.08] focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
+                              }`}
                             placeholder="Confirm new password"
                           />
                           {confirmPassword && (
@@ -592,7 +589,7 @@ function ProfileContent() {
                   {/* Recent Activity — Timeline */}
                   <GlassCard>
                     <SectionHeading icon={History} title="Recent Activity" subtitle={`${resumes.length} candidates processed`} iconColor="text-emerald-400" />
-                    
+
                     {resumes.length > 0 ? (
                       <div className="relative">
                         {/* Timeline line */}
@@ -608,9 +605,8 @@ function ProfileContent() {
                               className="relative flex items-start gap-4 pl-10"
                             >
                               {/* Dot */}
-                              <div className={`absolute left-[14px] top-4 w-2.5 h-2.5 rounded-full border-2 border-[#0f1629] z-10 ${
-                                resume.score >= 75 ? 'bg-emerald-400' : resume.score >= 60 ? 'bg-cyan-400' : resume.score >= 45 ? 'bg-amber-400' : 'bg-red-400'
-                              }`} />
+                              <div className={`absolute left-[14px] top-4 w-2.5 h-2.5 rounded-full border-2 border-[#0f1629] z-10 ${resume.score >= 75 ? 'bg-emerald-400' : resume.score >= 60 ? 'bg-cyan-400' : resume.score >= 45 ? 'bg-amber-400' : 'bg-red-400'
+                                }`} />
 
                               <div className="flex-1 p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.05] transition-colors">
                                 <div className="flex items-center justify-between">
@@ -623,15 +619,14 @@ function ProfileContent() {
                                       <p className="text-xs text-gray-500">{resume.email}</p>
                                     </div>
                                   </div>
-                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                                    resume.score >= 75
+                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${resume.score >= 75
                                       ? 'bg-emerald-500/15 text-emerald-400'
                                       : resume.score >= 60
-                                      ? 'bg-cyan-500/15 text-cyan-400'
-                                      : resume.score >= 45
-                                      ? 'bg-amber-500/15 text-amber-400'
-                                      : 'bg-red-500/15 text-red-400'
-                                  }`}>
+                                        ? 'bg-cyan-500/15 text-cyan-400'
+                                        : resume.score >= 45
+                                          ? 'bg-amber-500/15 text-amber-400'
+                                          : 'bg-red-500/15 text-red-400'
+                                    }`}>
                                     {resume.score}%
                                   </span>
                                 </div>
