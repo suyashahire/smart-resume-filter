@@ -9,7 +9,7 @@ import uvicorn
 
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
-from app.routes import auth, resumes, jobs, interviews, reports, realtime, chat, candidate, admin, messaging, insights
+from app.routes import auth, resumes, jobs, interviews, reports, realtime, chat, candidate, admin, messaging, insights, notifications
 
 
 @asynccontextmanager
@@ -124,6 +124,7 @@ app.include_router(candidate.router, prefix="/api/candidate", tags=["Candidate P
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(messaging.router, prefix="/api/messages", tags=["Messaging"])
 app.include_router(insights.router, prefix="/api", tags=["Resume Insights"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 
 
 @app.get("/", tags=["Root"])

@@ -11,7 +11,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 
 // Event types matching backend
-export type RealtimeEventType = 
+export type RealtimeEventType =
   | 'resume_uploaded'
   | 'resume_parsed'
   | 'candidate_scored'
@@ -20,6 +20,7 @@ export type RealtimeEventType =
   | 'report_generated'
   | 'job_created'
   | 'job_deleted'
+  | 'new_application'
   | 'connection_established';
 
 export interface RealtimeEvent {
@@ -51,21 +52,21 @@ function getWebSocketUrl(): string {
   if (process.env.NEXT_PUBLIC_WS_URL) {
     return process.env.NEXT_PUBLIC_WS_URL;
   }
-  
+
   // For server-side rendering
   if (typeof window === 'undefined') {
     return 'ws://localhost:8000/api/realtime/ws';
   }
-  
+
   // Auto-detect from current page URL
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host; // includes port if present
-  
+
   // In development (localhost with port 3000), connect to backend on 8000
   if (window.location.hostname === 'localhost' && window.location.port === '3000') {
     return `ws://localhost:8000/api/realtime/ws`;
   }
-  
+
   // In production, WebSocket is on same host (behind reverse proxy)
   // Or use NEXT_PUBLIC_API_URL to derive it
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -73,7 +74,7 @@ function getWebSocketUrl(): string {
     const wsUrl = apiUrl.replace(/^http/, 'ws').replace(/\/api$/, '/api/realtime/ws');
     return wsUrl;
   }
-  
+
   // Default: same host, standard ports
   return `${protocol}//${host}/api/realtime/ws`;
 }
@@ -98,15 +99,15 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
   const enabledRef = useRef(enabled);
   const userIdRef = useRef(userId);
   const tokenRef = useRef(token);
-  
+
   // Use refs for callbacks to avoid recreating connect function
   const onEventRef = useRef(onEvent);
   const onConnectionChangeRef = useRef(onConnectionChange);
-  
+
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<RealtimeEvent | null>(null);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
-  
+
   // Keep refs in sync
   useEffect(() => {
     onEventRef.current = onEvent;
@@ -118,21 +119,21 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
 
   const connect = useCallback(() => {
     if (!enabledRef.current || typeof window === 'undefined') return;
-    
+
     // Clean up existing connection
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
       wsRef.current.close();
     }
-    
+
     // Build WebSocket URL with auth params
     const params = new URLSearchParams();
     params.set('user_id', userIdRef.current);
     if (tokenRef.current) {
       params.set('token', tokenRef.current);
     }
-    
+
     const wsUrl = `${WS_BASE_URL}?${params.toString()}`;
-    
+
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -143,7 +144,7 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
         connectionAttemptsRef.current = 0;
         setConnectionAttempts(0);
         onConnectionChangeRef.current?.(true);
-        
+
         // Start ping interval to keep connection alive
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -156,12 +157,12 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
         console.log('🔴 WebSocket disconnected', event.code, event.reason);
         setIsConnected(false);
         onConnectionChangeRef.current?.(false);
-        
+
         // Clear ping interval
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
         }
-        
+
         // Auto-reconnect (only if enabled and not manually closed)
         if (autoReconnect && enabledRef.current && event.code !== 1000) {
           connectionAttemptsRef.current += 1;
@@ -178,12 +179,12 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
       ws.onmessage = (event) => {
         // Handle pong response
         if (event.data === 'pong') return;
-        
+
         try {
           const message = JSON.parse(event.data) as RealtimeEvent;
           setLastEvent(message);
           onEventRef.current?.(message);
-          
+
           // Handle specific event types
           handleEvent(message);
         } catch (error) {
@@ -201,36 +202,40 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
         // Refresh resumes or add to local state
         console.log('📄 New resume uploaded:', event.data);
         break;
-        
+
       case 'candidate_scored':
         // Update candidate score in local state
         console.log('🎯 Candidate scored:', event.data);
         break;
-        
+
       case 'interview_analyzed':
         // Update interview analysis
         console.log('🎤 Interview analyzed:', event.data);
         break;
-        
+
       case 'job_created':
         // Add new job to local state
         console.log('💼 Job created:', event.data);
         break;
-        
+
       case 'job_deleted':
         // Remove job from local state
         console.log('🗑️ Job deleted:', event.data);
         break;
-        
+
+      case 'new_application':
+        console.log('📩 New application:', event.data);
+        break;
+
       case 'pipeline_status_changed':
         // Update pipeline status
         console.log('📊 Pipeline status changed:', event.data);
         break;
-        
+
       case 'connection_established':
         console.log('✅ Connection established:', event.data);
         break;
-        
+
       default:
         console.log('📬 Event received:', event);
     }
@@ -259,7 +264,7 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
     } else {
       disconnect();
     }
-    
+
     return () => {
       disconnect();
     };
@@ -311,6 +316,8 @@ export function useRealtimeNotifications() {
           return `New job created: ${event.data.title}`;
         case 'job_deleted':
           return `Job deleted: ${event.data.title}`;
+        case 'new_application':
+          return `${event.data.candidate_name || 'A candidate'} applied for ${event.data.job_title || 'a position'}`;
         default:
           return `Update received`;
       }

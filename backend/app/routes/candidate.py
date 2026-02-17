@@ -18,6 +18,8 @@ from app.models.application import (
 from app.models.screening import ScreeningResult
 from app.routes.auth import get_current_user, require_candidate
 from app.services.resume_parser import get_resume_parser
+from app.models.notification import Notification, NotificationType
+from app.services.websocket_manager import get_connection_manager, EventType
 
 router = APIRouter()
 
@@ -171,7 +173,40 @@ async def apply_to_job(
     )
     
     await application.insert()
-    
+
+    # ── Notify the HR user who created this job ──
+    try:
+        candidate_name = current_user.name or current_user.email
+        notification = Notification(
+            recipient_id=job.user_id,
+            type=NotificationType.NEW_APPLICATION,
+            title="New Application Received",
+            message=f"{candidate_name} applied for {job.title}",
+            job_id=job_id,
+            application_id=str(application.id),
+            candidate_id=str(current_user.id),
+            candidate_name=candidate_name,
+            job_title=job.title,
+        )
+        await notification.insert()
+
+        # Real-time push via WebSocket
+        ws_manager = get_connection_manager()
+        await ws_manager.broadcast_event(
+            EventType.NEW_APPLICATION,
+            {
+                "notification_id": str(notification.id),
+                "candidate_name": candidate_name,
+                "job_title": job.title,
+                "job_id": job_id,
+                "application_id": str(application.id),
+            },
+            user_id=job.user_id,  # Only send to the HR who owns this job
+        )
+    except Exception as e:
+        # Don't fail the application if notification fails
+        print(f"⚠️ Failed to send application notification: {e}")
+
     return ApplicationResponse(
         id=str(application.id),
         candidate_id=application.candidate_id,

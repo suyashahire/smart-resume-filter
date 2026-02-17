@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar } from 'lucide-react';
+import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar, UserPlus } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import CalendarModal from '@/components/Calendar/CalendarModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,7 @@ const eventIcons: Record<RealtimeEventType, React.ReactNode> = {
   report_generated: <FileText className="h-3.5 w-3.5" />,
   job_created: <Briefcase className="h-3.5 w-3.5" />,
   job_deleted: <Trash2 className="h-3.5 w-3.5" />,
+  new_application: <UserPlus className="h-3.5 w-3.5" />,
   connection_established: <Wifi className="h-3.5 w-3.5" />,
 };
 
@@ -33,6 +34,7 @@ const eventColors: Record<RealtimeEventType, string> = {
   report_generated: 'bg-indigo-500',
   job_created: 'bg-teal-500',
   job_deleted: 'bg-red-500',
+  new_application: 'bg-emerald-500',
   connection_established: 'bg-gray-500',
 };
 
@@ -42,7 +44,7 @@ function formatTimestamp(date: Date): string {
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
-  
+
   if (diffSec < 60) return 'Just now';
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffHour < 24) return `${diffHour}h ago`;
@@ -57,24 +59,24 @@ export default function Navbar() {
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const { user, isAuthenticated, logout, useRealApi } = useStore();
-  
+
   // Realtime notifications
   const [authToken, setAuthToken] = useState<string | undefined>(undefined);
   const { notifications, addNotification, dismissNotification, clearNotifications } = useRealtimeNotifications();
-  
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('auth_token');
       setAuthToken(token || undefined);
     }
   }, []);
-  
+
   const handleEvent = useCallback((event: RealtimeEvent) => {
     if (event.type !== 'connection_established') {
       addNotification(event);
     }
   }, [addNotification]);
-  
+
   const { isConnected } = useRealtimeUpdates({
     onEvent: handleEvent,
     token: authToken,
@@ -110,17 +112,17 @@ export default function Navbar() {
   // Add role-specific items
   const getNavItems = () => {
     let items = [...baseNavItems];
-    
+
     // Add Messages for HR users
     if (user?.role === 'hr_manager' || user?.role === 'admin') {
       items.push({ name: 'Messages', path: '/messages' });
     }
-    
+
     // Add Admin for admin users
     if (user?.role === 'admin') {
       items.push({ name: 'Admin', path: '/admin' });
     }
-    
+
     return items;
   };
 
@@ -140,19 +142,16 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled 
-          ? 'py-2' 
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
+          ? 'py-2'
           : 'py-4'
-      }`}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-300 ${
-          scrolled ? '' : ''
         }`}>
-          <div className={`flex items-center justify-between px-4 lg:px-6 py-3 rounded-2xl transition-all duration-300 ${
-            scrolled
+        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-300 ${scrolled ? '' : ''
+          }`}>
+          <div className={`flex items-center justify-between px-4 lg:px-6 py-3 rounded-2xl transition-all duration-300 ${scrolled
               ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg shadow-gray-200/20 dark:shadow-black/20 border border-gray-200/50 dark:border-gray-700/50'
               : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-md border border-gray-200/30 dark:border-gray-700/30'
-          }`}>
+            }`}>
             {/* Logo */}
             <Link href="/" className="flex items-center gap-3 group">
               <div className="relative">
@@ -175,11 +174,10 @@ export default function Navbar() {
                   <Link
                     key={item.path}
                     href={item.path}
-                    className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                      pathname === item.path
+                    className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${pathname === item.path
                         ? 'text-white'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     {pathname === item.path && (
                       <motion.div
@@ -470,18 +468,17 @@ export default function Navbar() {
                     <Link
                       href={item.path}
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block px-4 py-3 rounded-xl text-base font-medium transition-all ${
-                        pathname === item.path
+                      className={`block px-4 py-3 rounded-xl text-base font-medium transition-all ${pathname === item.path
                           ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg'
                           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
+                        }`}
                     >
                       {item.name}
                     </Link>
                   </motion.div>
                 ))}
               </div>
-              
+
               {isAuthenticated && user && (
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800">
                   <Link

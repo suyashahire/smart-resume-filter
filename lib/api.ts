@@ -760,3 +760,41 @@ export async function checkATSCompatibility(resumeId: string): Promise<{
   return apiRequest(`/insights/${resumeId}/ats-compatibility`);
 }
 
+// ==================== Notifications ====================
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  job_id?: string;
+  application_id?: string;
+  candidate_id?: string;
+  candidate_name?: string;
+  job_title?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationItem[];
+  total: number;
+  unread_count: number;
+}
+
+export async function getNotifications(unreadOnly = false): Promise<NotificationListResponse> {
+  const params = unreadOnly ? '?unread_only=true' : '';
+  return apiRequest(`/notifications${params}`);
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  return apiRequest(`/notifications/${notificationId}/read`, { method: 'PUT' });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  return apiRequest('/notifications/read-all', { method: 'PUT' });
+}
+
+export async function deleteNotification(notificationId: string): Promise<void> {
+  return apiRequest(`/notifications/${notificationId}`, { method: 'DELETE' });
+}

@@ -21,6 +21,7 @@ class EventType(str, Enum):
     REPORT_GENERATED = "report_generated"
     JOB_CREATED = "job_created"
     JOB_DELETED = "job_deleted"
+    NEW_APPLICATION = "new_application"
     CONNECTION_ESTABLISHED = "connection_established"
 
 

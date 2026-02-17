@@ -15,6 +15,7 @@ from app.models.screening import ScreeningResult
 from app.models.conversation import Conversation
 from app.models.application import Application
 from app.models.message import DirectMessage, DirectConversation
+from app.models.notification import Notification
 
 
 class Database:
@@ -43,6 +44,7 @@ async def connect_to_mongo():
             Application,
             DirectMessage,
             DirectConversation,
+            Notification,
         ]
     )
     
