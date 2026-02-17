@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useStore } from '@/store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -39,7 +40,7 @@ interface CalendarModalProps {
   variant?: 'candidate' | 'hr';
 }
 
-const STORAGE_KEY = 'hireq_calendar_events';
+const STORAGE_KEY_PREFIX = 'hireq_calendar_events';
 
 const eventTypes = [
   { id: 'interview', label: 'Interview', icon: Users, color: 'bg-violet-500', gradient: 'from-violet-500 to-purple-600', textColor: 'text-violet-500', bgLight: 'bg-violet-50 dark:bg-violet-500/10' },
@@ -56,6 +57,7 @@ const eventColorMap: Record<string, string> = {
 };
 
 export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }: CalendarModalProps) {
+  const { user } = useStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -68,19 +70,39 @@ export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }
     description: '',
   });
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  // Load events from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setEvents(JSON.parse(stored));
+  // Build a user-specific storage key so each user's events are isolated
+  const storageKey = useMemo(() => {
+    if (user?.id) {
+      return `${STORAGE_KEY_PREFIX}_${user.id}`;
     }
-  }, []);
+    // Fallback for unauthenticated users (shouldn't normally happen)
+    return `${STORAGE_KEY_PREFIX}_guest`;
+  }, [user?.id]);
 
-  // Save events to localStorage
+  // Load events from localStorage (per-user)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-  }, [events]);
+    setHasLoaded(false);
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      try {
+        setEvents(JSON.parse(stored));
+      } catch {
+        setEvents([]);
+      }
+    } else {
+      setEvents([]);
+    }
+    setHasLoaded(true);
+  }, [storageKey]);
+
+  // Save events to localStorage (per-user) — only after initial load
+  useEffect(() => {
+    if (hasLoaded) {
+      localStorage.setItem(storageKey, JSON.stringify(events));
+    }
+  }, [events, storageKey, hasLoaded]);
 
   const isHR = variant === 'hr';
 
