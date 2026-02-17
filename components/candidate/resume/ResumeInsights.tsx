@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Target, FileCheck, CheckCircle2 } from 'lucide-react';
-import { getResumeInsights } from '@/lib/api';
+import { getResumeInsights, optimizeResumeWithAI, checkATSCompatibility } from '@/lib/api';
 
 const CARD_CLASS =
   'rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-sm';
@@ -12,6 +12,12 @@ export default function ResumeInsights({ resumeId }: { resumeId?: string }) {
   const [score, setScore] = useState<number | null>(null);
   const [keywordCoverage, setKeywordCoverage] = useState<number | null>(null);
   const [formattingHealth, setFormattingHealth] = useState<number | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimized, setOptimized] = useState<string | null>(null);
+  const [optSummary, setOptSummary] = useState<string | null>(null);
+  const [atsScore, setAtsScore] = useState<number | null>(null);
+  const [atsIssues, setAtsIssues] = useState<string[] | null>(null);
+  const [atsLoading, setAtsLoading] = useState(false);
 
   useEffect(() => {
     if (!resumeId) return;
@@ -27,6 +33,40 @@ export default function ResumeInsights({ resumeId }: { resumeId?: string }) {
         setFormattingHealth(null);
       });
   }, [resumeId]);
+
+  const handleOptimize = async () => {
+    if (!resumeId) return;
+    setOptimizing(true);
+    setOptimized(null);
+    setOptSummary(null);
+    try {
+      const data = await optimizeResumeWithAI(resumeId);
+      setOptimized(data.improved_text);
+      setOptSummary(data.summary);
+    } catch {
+      setOptimized('Failed to optimize resume.');
+      setOptSummary(null);
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const handleATS = async () => {
+    if (!resumeId) return;
+    setAtsLoading(true);
+    setAtsScore(null);
+    setAtsIssues(null);
+    try {
+      const data = await checkATSCompatibility(resumeId);
+      setAtsScore(data.ats_score);
+      setAtsIssues(data.issues);
+    } catch {
+      setAtsScore(null);
+      setAtsIssues(['Failed to check ATS compatibility.']);
+    } finally {
+      setAtsLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -78,16 +118,38 @@ export default function ResumeInsights({ resumeId }: { resumeId?: string }) {
           <button
             type="button"
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-candidate-500 hover:bg-candidate-600 dark:bg-candidate-600 dark:hover:bg-candidate-500 text-white shadow-sm shadow-candidate-500/20 transition-colors"
+            onClick={handleOptimize}
+            disabled={optimizing || !resumeId}
           >
             <Sparkles className="h-4 w-4" />
-            Optimize resume with AI
+            {optimizing ? 'Optimizing…' : 'Optimize resume with AI'}
           </button>
+          {optimized && (
+            <div className="mt-2 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <div className="text-xs text-gray-700 dark:text-gray-200 mb-1 font-semibold">AI Suggestions:</div>
+              <div className="text-xs text-gray-800 dark:text-gray-100 whitespace-pre-line">{optimized}</div>
+              {optSummary && <div className="text-xs text-green-700 dark:text-green-400 mt-1">{optSummary}</div>}
+            </div>
+          )}
           <button
             type="button"
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            onClick={handleATS}
+            disabled={atsLoading || !resumeId}
           >
-            Check ATS compatibility
+            {atsLoading ? 'Checking…' : 'Check ATS compatibility'}
           </button>
+          {atsScore !== null && (
+            <div className="mt-2 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div className="text-xs text-gray-700 dark:text-gray-200 mb-1 font-semibold">ATS Compatibility:</div>
+              <div className="text-xs text-blue-800 dark:text-blue-100">Score: {atsScore}%</div>
+              {atsIssues && atsIssues.length > 0 && (
+                <ul className="text-xs text-blue-700 dark:text-blue-300 mt-1 list-disc pl-4">
+                  {atsIssues.map((issue, i) => <li key={i}>{issue}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

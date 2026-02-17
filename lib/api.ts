@@ -726,3 +726,25 @@ export async function getResumeInsights(resumeId: string): Promise<{
   return apiRequest(`/insights/${resumeId}`);
 }
 
+// ==================== Resume Optimization ====================
+
+export async function optimizeResumeWithAI(resumeId: string, instructions?: string): Promise<{
+  improved_text: string;
+  summary: string;
+}> {
+  return apiRequest(`/insights/${resumeId}/optimize`, {
+    method: 'POST',
+    body: instructions ? JSON.stringify({ instructions }) : undefined,
+    headers: instructions ? { 'Content-Type': 'application/json' } : undefined,
+  });
+}
+
+// ==================== ATS Compatibility ====================
+
+export async function checkATSCompatibility(resumeId: string): Promise<{
+  ats_score: number;
+  issues: string[];
+}> {
+  return apiRequest(`/insights/${resumeId}/ats-compatibility`);
+}
+
