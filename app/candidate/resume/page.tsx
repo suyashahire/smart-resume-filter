@@ -209,7 +209,7 @@ export default function CandidateResumePage() {
             <ResumeTips />
           </div>
           <div className="lg:col-span-5">
-            <ResumeInsights />
+            <ResumeInsights resumeId={resume?.id} />
           </div>
         </div>
       </div>

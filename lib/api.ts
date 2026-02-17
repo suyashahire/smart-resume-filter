@@ -716,3 +716,13 @@ export async function sendCandidateFeedback(
   });
 }
 
+// ==================== Resume Insights ====================
+
+export async function getResumeInsights(resumeId: string): Promise<{
+  match_score: number;
+  keyword_coverage: number;
+  formatting_health: number;
+}> {
+  return apiRequest(`/insights/${resumeId}`);
+}
+

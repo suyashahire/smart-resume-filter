@@ -1,16 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Target, FileCheck, CheckCircle2 } from 'lucide-react';
+import { getResumeInsights } from '@/lib/api';
 
 const CARD_CLASS =
   'rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-sm';
 
-export default function ResumeInsights() {
-  const [score] = useState<number | null>(null);
-  const [keywordCoverage] = useState<number | null>(null);
-  const [formattingHealth] = useState<number | null>(null);
+export default function ResumeInsights({ resumeId }: { resumeId?: string }) {
+  const [score, setScore] = useState<number | null>(null);
+  const [keywordCoverage, setKeywordCoverage] = useState<number | null>(null);
+  const [formattingHealth, setFormattingHealth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!resumeId) return;
+    getResumeInsights(resumeId)
+      .then((data) => {
+        setScore(data.match_score ?? null);
+        setKeywordCoverage(data.keyword_coverage ?? null);
+        setFormattingHealth(data.formatting_health ?? null);
+      })
+      .catch(() => {
+        setScore(null);
+        setKeywordCoverage(null);
+        setFormattingHealth(null);
+      });
+  }, [resumeId]);
 
   return (
     <motion.div
