@@ -670,6 +670,33 @@ export async function deleteCandidateResume(resumeId: string): Promise<{ message
   });
 }
 
+export async function viewCandidateResume(resumeId: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  
+  const response = await fetch(`${API_BASE_URL}/candidate/resumes/${resumeId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to download resume' }));
+    throw new Error(error.detail || 'Failed to download resume');
+  }
+  
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  
+  // Open in a new tab for viewing
+  window.open(url, '_blank');
+  
+  // Clean up blob URL after a delay
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 // ==================== Resume Percentile & Rankings ====================
 
 export interface PercentileData {

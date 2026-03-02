@@ -15,6 +15,8 @@ import {
   MessageSquare,
   TrendingUp,
   ArrowRight,
+  Brain,
+  Sparkles,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { login, register } from '@/lib/api';
@@ -87,13 +89,19 @@ export default function CandidateLoginPage() {
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-candidate-600 to-cyan-600 p-12 flex-col justify-between">
         <div>
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">H</span>
+          <Link href="/" className="flex items-center space-x-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-white/20 rounded-xl blur-lg" />
+              <div className="relative w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                <Brain className="h-7 w-7 text-white" />
+              </div>
             </div>
             <div>
               <span className="text-2xl font-bold text-white">HireQ</span>
-              <span className="text-sm text-white/70 block">Career Portal</span>
+              <div className="flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-white/70" />
+                <span className="text-sm text-white/70">Career Portal</span>
+              </div>
             </div>
           </Link>
         </div>
@@ -143,13 +151,19 @@ export default function CandidateLoginPage() {
         >
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 text-center">
-            <Link href="/" className="inline-flex items-center space-x-2">
-              <div className="w-12 h-12 bg-candidate-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">H</span>
+            <Link href="/" className="inline-flex items-center space-x-3">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-candidate-500 to-cyan-500 rounded-xl blur-lg opacity-50" />
+                <div className="relative w-12 h-12 bg-gradient-to-br from-candidate-500 to-cyan-600 rounded-xl flex items-center justify-center">
+                  <Brain className="h-7 w-7 text-white" />
+                </div>
               </div>
               <div>
                 <span className="text-2xl font-bold text-gray-900 dark:text-white">HireQ</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400 block">Career Portal</span>
+                <div className="flex items-center gap-1">
+                  <Sparkles className="h-3 w-3 text-candidate-500" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Career Portal</span>
+                </div>
               </div>
             </Link>
           </div>

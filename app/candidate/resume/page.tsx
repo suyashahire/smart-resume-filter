@@ -173,6 +173,16 @@ export default function CandidateResumePage() {
     }
   };
 
+  // Handle view resume
+  const handleViewResume = async (resumeId: string) => {
+    try {
+      setError('');
+      await api.viewCandidateResume(resumeId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to view resume');
+    }
+  };
+
   // Handle add version button
   const handleAddVersion = () => {
     if (versions.length >= MAX_VERSIONS) {
@@ -334,7 +344,9 @@ export default function CandidateResumePage() {
                       updated_at: activeResume.updated_at,
                     }}
                     onView={() => {
-                      // TODO: Implement view/preview
+                      if (activeResume.id) {
+                        handleViewResume(activeResume.id);
+                      }
                     }}
                     onReplace={() => {
                       // For now, open upload modal for new version

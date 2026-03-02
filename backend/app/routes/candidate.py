@@ -3,6 +3,7 @@ Candidate routes for job browsing, applications, and profile management.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
+from fastapi.responses import FileResponse
 from datetime import datetime
 from typing import Optional, List
 import os
@@ -800,6 +801,46 @@ async def delete_resume_version(
             await other_resume.save()
     
     return {"message": "Resume deleted successfully"}
+
+
+@router.get("/resumes/{resume_id}/download")
+async def download_candidate_resume(
+    resume_id: str,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Download a resume file for viewing.
+    Returns the PDF or DOCX file that was originally uploaded.
+    """
+    resume = await Resume.get(resume_id)
+    
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found"
+        )
+    
+    if resume.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own resumes"
+        )
+    
+    if not resume.file_path or not os.path.exists(resume.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume file not found on server"
+        )
+    
+    # Determine media type based on file extension
+    ext = os.path.splitext(resume.file_path)[1].lower()
+    media_type = "application/pdf" if ext == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    
+    return FileResponse(
+        path=resume.file_path,
+        filename=resume.file_name,
+        media_type=media_type
+    )
 
 
 # ==================== Profile ====================

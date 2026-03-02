@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   Calendar,
   FileBadge,
+  Brain,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -86,14 +87,17 @@ export default function CandidateNavbar() {
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-candidate-500 to-cyan-500 rounded-xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity"></div>
                 <div className="relative w-10 h-10 bg-gradient-to-br from-candidate-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-xl font-bold text-white">H</span>
+                  <Brain className="h-6 w-6 text-white" />
                 </div>
               </div>
               <div className="hidden sm:block">
                 <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 bg-clip-text text-transparent">
                   HireQ
                 </span>
-                <span className="text-xs text-candidate-600 dark:text-candidate-400 block -mt-1">Career Portal</span>
+                <div className="flex items-center gap-1 -mt-1">
+                  <Sparkles className="h-3 w-3 text-candidate-500" />
+                  <span className="text-xs text-candidate-600 dark:text-candidate-400">Career Portal</span>
+                </div>
               </div>
             </Link>
 
