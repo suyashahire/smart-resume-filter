@@ -208,6 +208,23 @@ export function useCandidateChat() {
 function generateCandidateMockResponse(query: string): string {
   const q = query.toLowerCase();
 
+  // Check for personal data questions FIRST (before generic tips)
+  if (q.match(/\b(my|mine)\b/) && q.match(/\b(skill|skills|resume|application|applications|status|profile|experience)\b/)) {
+    return (
+      "🔒 **Personal Data Unavailable**\n\n" +
+      "I'd love to tell you about your specific resume data, but I'm currently in **offline mode** and can't access your personal information.\n\n" +
+      "**To get your actual data:**\n" +
+      "1. Make sure the backend server is running\n" +
+      "2. Ensure you're logged in to your account\n" +
+      "3. Check your network connection\n\n" +
+      "**In the meantime, you can:**\n" +
+      "- Visit **My Resume** to see your uploaded resumes and skills\n" +
+      "- Check **My Applications** for application status\n" +
+      "- Browse **Dashboard** for an overview of your activity\n\n" +
+      "*Once connected, I'll be able to answer questions about your specific resume, skills, applications, and more!*"
+    );
+  }
+
   if (q.match(/\b(hello|hi|hey|help)\b/)) {
     return (
       "👋 **Hello! I'm the HireQ Career Assistant.**\n\n" +

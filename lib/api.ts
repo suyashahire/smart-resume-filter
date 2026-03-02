@@ -595,6 +595,170 @@ export async function uploadCandidateResume(file: File): Promise<any> {
   return response.json();
 }
 
+// ==================== Multi-Version Resume Management ====================
+
+export interface ResumeVersion {
+  id: string;
+  file_name: string;
+  file_size: number;
+  version_label: string | null;
+  is_primary: boolean;
+  version_number: number;
+  parsed_data: {
+    name: string;
+    email: string;
+    phone: string;
+    skills: string[];
+    education: string;
+    experience: string;
+    summary: string | null;
+    certifications: string[];
+    languages: string[];
+    linkedin: string | null;
+    github: string | null;
+    years_of_experience: number | null;
+  };
+  is_parsed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getCandidateResumes(): Promise<ResumeVersion[]> {
+  return apiRequest('/candidate/resumes');
+}
+
+export async function uploadCandidateResumeVersion(file: File, versionLabel?: string): Promise<ResumeVersion> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (versionLabel) {
+    formData.append('version_label', versionLabel);
+  }
+
+  const token = getAuthToken();
+
+  const response = await fetch(`${API_BASE_URL}/candidate/resumes`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+    throw new Error(error.detail);
+  }
+
+  return response.json();
+}
+
+export async function setResumeAsPrimary(resumeId: string): Promise<{ message: string; resume_id: string }> {
+  return apiRequest(`/candidate/resumes/${resumeId}/set-primary`, {
+    method: 'PUT',
+  });
+}
+
+export async function updateResumeLabel(resumeId: string, versionLabel: string): Promise<{ message: string }> {
+  return apiRequest(`/candidate/resumes/${resumeId}?version_label=${encodeURIComponent(versionLabel)}`, {
+    method: 'PUT',
+  });
+}
+
+export async function deleteCandidateResume(resumeId: string): Promise<{ message: string }> {
+  return apiRequest(`/candidate/resumes/${resumeId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ==================== Resume Percentile & Rankings ====================
+
+export interface PercentileData {
+  percentile: number;
+  total_candidates: number;
+  badge: string;
+  rank: number;
+  score: number;
+}
+
+export async function getResumePercentile(resumeId: string): Promise<PercentileData> {
+  return apiRequest(`/insights/${resumeId}/percentile`);
+}
+
+// ==================== Detailed ATS Insights ====================
+
+export interface ATSSectionScore {
+  score: number;
+  issues: string[];
+}
+
+export interface ATSDetailedBreakdown {
+  total_score: number;
+  sections: {
+    contact: ATSSectionScore;
+    experience: ATSSectionScore;
+    skills: ATSSectionScore;
+    education: ATSSectionScore;
+    formatting: ATSSectionScore;
+  };
+  issues: string[];
+  quick_wins: string[];
+}
+
+export async function getATSDetailedBreakdown(resumeId: string): Promise<ATSDetailedBreakdown> {
+  return apiRequest(`/insights/${resumeId}/ats-detailed`);
+}
+
+// ==================== Job-Specific ATS ====================
+
+export interface JobSpecificATS {
+  job_id: string;
+  job_title: string;
+  ats_score: number;
+  required_skills: {
+    matched: string[];
+    missing: string[];
+    match_rate: number;
+  };
+  preferred_skills: {
+    matched: string[];
+    missing: string[];
+    match_rate: number;
+  };
+  experience: {
+    match: boolean;
+    note: string;
+  };
+  suggestions: string[];
+}
+
+export async function getJobSpecificATS(resumeId: string, jobId: string): Promise<JobSpecificATS> {
+  return apiRequest(`/insights/${resumeId}/ats-job/${jobId}`);
+}
+
+// ==================== Resume Improvements ====================
+
+export interface ImprovementSection {
+  name: string;
+  score: number;
+  suggestions: string[];
+}
+
+export interface QuickWin {
+  section: string;
+  suggestion: string;
+  impact: number;
+}
+
+export interface ResumeImprovements {
+  overall_score: number;
+  sections: ImprovementSection[];
+  quick_wins: QuickWin[];
+}
+
+export async function getResumeImprovements(resumeId: string): Promise<ResumeImprovements> {
+  return apiRequest(`/insights/${resumeId}/improvements`);
+}
+
 export async function getCandidateProfile(): Promise<any> {
   return apiRequest('/candidate/profile');
 }

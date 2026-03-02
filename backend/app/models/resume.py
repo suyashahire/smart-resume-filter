@@ -37,6 +37,11 @@ class Resume(Document):
     parsed_data: ParsedResumeData = Field(default_factory=ParsedResumeData)
     raw_text: Optional[str] = None  # Full extracted text
     
+    # Version management (candidates can have up to 3 versions)
+    version_label: Optional[str] = None  # e.g., "Marketing", "Technical", "General"
+    is_primary: bool = Field(default=False)  # The active resume used for applications
+    version_number: int = Field(default=1)  # For ordering versions
+    
     # Processing status
     is_parsed: bool = Field(default=False)
     parse_error: Optional[str] = None
@@ -78,6 +83,9 @@ class ResumeUploadResponse(BaseModel):
     file_name: str
     is_parsed: bool
     parsed_data: ParsedResumeData
+    version_label: Optional[str] = None
+    is_primary: bool = False
+    version_number: int = 1
     created_at: datetime
     
     class Config:
@@ -90,7 +98,29 @@ class ResumeListResponse(BaseModel):
     file_name: str
     parsed_data: ParsedResumeData
     is_parsed: bool
+    version_label: Optional[str] = None
+    is_primary: bool = False
+    version_number: int = 1
+    file_size: int = 0
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ResumeVersionResponse(BaseModel):
+    """Response for a resume version."""
+    id: str
+    file_name: str
+    file_size: int
+    version_label: Optional[str] = None
+    is_primary: bool = False
+    version_number: int = 1
+    parsed_data: ParsedResumeData
+    is_parsed: bool
+    created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True

@@ -10,7 +10,7 @@ import uuid
 
 from app.models.user import User, UserRole
 from app.models.job import JobDescription, JobDescriptionResponse
-from app.models.resume import Resume
+from app.models.resume import Resume, ResumeVersionResponse
 from app.models.application import (
     Application, ApplicationStatus, StatusChange,
     ApplicationCreate, ApplicationResponse, ApplicationListResponse
@@ -542,6 +542,264 @@ async def upload_my_resume(
             "parsed_data": parsed_data,
         }
     }
+
+
+# ==================== Multi-Version Resume Management ====================
+
+MAX_RESUME_VERSIONS = 3
+
+
+@router.get("/resumes", response_model=List[ResumeVersionResponse])
+async def get_all_my_resumes(
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Get all resume versions for the candidate (up to 3).
+    """
+    resumes = await Resume.find({"user_id": str(current_user.id)}).sort("version_number").to_list()
+    
+    return [
+        ResumeVersionResponse(
+            id=str(r.id),
+            file_name=r.file_name,
+            file_size=r.file_size,
+            version_label=r.version_label,
+            is_primary=r.is_primary,
+            version_number=r.version_number,
+            parsed_data=r.parsed_data,
+            is_parsed=r.is_parsed,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
+        for r in resumes
+    ]
+
+
+@router.post("/resumes", response_model=ResumeVersionResponse)
+async def upload_resume_version(
+    file: UploadFile = File(...),
+    version_label: Optional[str] = None,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Upload a new resume version. Candidates can have up to 3 versions.
+    The first uploaded resume is automatically set as primary.
+    """
+    # Check existing resume count
+    existing_resumes = await Resume.find({"user_id": str(current_user.id)}).to_list()
+    
+    if len(existing_resumes) >= MAX_RESUME_VERSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum {MAX_RESUME_VERSIONS} resume versions allowed. Please delete one before uploading a new version."
+        )
+    
+    # Validate file type
+    allowed_types = [".pdf", ".doc", ".docx"]
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    
+    if file_ext not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: {', '.join(allowed_types)}"
+        )
+    
+    # Read file content
+    content = await file.read()
+    
+    # Check file size (max 10MB)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds 10MB limit"
+        )
+    
+    # Save file to disk
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "resumes")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Generate unique filename
+    unique_id = uuid.uuid4().hex[:8]
+    safe_filename = f"{current_user.id}_{unique_id}_{file.filename}"
+    file_path = os.path.join(upload_dir, safe_filename)
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Parse resume
+    parser = get_resume_parser()
+    try:
+        parsed_data, raw_text = await parser.parse_resume(file_path)
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse resume: {str(e)}"
+        )
+    
+    # Determine version number
+    next_version = max([r.version_number for r in existing_resumes], default=0) + 1
+    
+    # First resume is automatically primary
+    is_primary = len(existing_resumes) == 0
+    
+    # Create new resume version
+    resume = Resume(
+        user_id=str(current_user.id),
+        file_name=file.filename,
+        file_path=file_path,
+        file_size=len(content),
+        file_type=file.content_type or "application/octet-stream",
+        parsed_data=parsed_data,
+        raw_text=raw_text,
+        is_parsed=True,
+        version_label=version_label,
+        is_primary=is_primary,
+        version_number=next_version,
+    )
+    await resume.insert()
+    
+    return ResumeVersionResponse(
+        id=str(resume.id),
+        file_name=resume.file_name,
+        file_size=resume.file_size,
+        version_label=resume.version_label,
+        is_primary=resume.is_primary,
+        version_number=resume.version_number,
+        parsed_data=resume.parsed_data,
+        is_parsed=resume.is_parsed,
+        created_at=resume.created_at,
+        updated_at=resume.updated_at,
+    )
+
+
+@router.put("/resumes/{resume_id}/set-primary")
+async def set_resume_as_primary(
+    resume_id: str,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Set a resume version as the primary (active) resume for applications.
+    """
+    resume = await Resume.get(resume_id)
+    
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found"
+        )
+    
+    if resume.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only modify your own resumes"
+        )
+    
+    # Unset current primary
+    await Resume.find({"user_id": str(current_user.id), "is_primary": True}).update(
+        {"$set": {"is_primary": False, "updated_at": datetime.utcnow()}}
+    )
+    
+    # Set new primary
+    resume.is_primary = True
+    resume.updated_at = datetime.utcnow()
+    await resume.save()
+    
+    return {
+        "message": "Resume set as primary successfully",
+        "resume_id": str(resume.id)
+    }
+
+
+@router.put("/resumes/{resume_id}")
+async def update_resume_version(
+    resume_id: str,
+    version_label: Optional[str] = None,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Update a resume version's label/metadata.
+    """
+    resume = await Resume.get(resume_id)
+    
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found"
+        )
+    
+    if resume.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only modify your own resumes"
+        )
+    
+    if version_label is not None:
+        resume.version_label = version_label
+    
+    resume.updated_at = datetime.utcnow()
+    await resume.save()
+    
+    return {
+        "message": "Resume updated successfully",
+        "resume": {
+            "id": str(resume.id),
+            "version_label": resume.version_label,
+        }
+    }
+
+
+@router.delete("/resumes/{resume_id}")
+async def delete_resume_version(
+    resume_id: str,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Delete a resume version. Cannot delete if it's the only resume.
+    If deleting the primary, another version becomes primary automatically.
+    """
+    resume = await Resume.get(resume_id)
+    
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found"
+        )
+    
+    if resume.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own resumes"
+        )
+    
+    # Check if it's the only resume
+    resume_count = await Resume.find({"user_id": str(current_user.id)}).count()
+    
+    if resume_count <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your only resume. Upload a new version first."
+        )
+    
+    was_primary = resume.is_primary
+    
+    # Delete file from disk
+    if resume.file_path and os.path.exists(resume.file_path):
+        os.remove(resume.file_path)
+    
+    # Delete from database
+    await resume.delete()
+    
+    # If was primary, set another resume as primary
+    if was_primary:
+        other_resume = await Resume.find_one({"user_id": str(current_user.id)})
+        if other_resume:
+            other_resume.is_primary = True
+            other_resume.updated_at = datetime.utcnow()
+            await other_resume.save()
+    
+    return {"message": "Resume deleted successfully"}
 
 
 # ==================== Profile ====================

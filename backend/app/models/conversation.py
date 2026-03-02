@@ -68,6 +68,7 @@ class ChatRequest(BaseModel):
     """Schema for sending a chat message."""
     message: str = Field(..., min_length=1, max_length=2000)
     conversation_id: Optional[str] = None  # None for new conversation
+    context: Optional[str] = None  # 'candidate' or 'hr' - for anonymous/role hints
 
 
 class ChatResponse(BaseModel):

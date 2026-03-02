@@ -20,6 +20,7 @@ import {
   Sparkles,
   LayoutDashboard,
   Calendar,
+  FileBadge,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/candidate', label: 'Home', icon: Home },
   { href: '/candidate/jobs', label: 'Browse Jobs', icon: Briefcase },
   { href: '/candidate/applications', label: 'My Applications', icon: FileText },
+  { href: '/candidate/resume', label: 'My Resume', icon: FileBadge },
   { href: '/candidate/messages', label: 'Messages', icon: MessageSquare },
   { href: '/candidate/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ];

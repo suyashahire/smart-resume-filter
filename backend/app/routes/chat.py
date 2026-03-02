@@ -63,10 +63,11 @@ async def send_message(
         for msg in conversation.messages[:-1]  # Exclude current message
     ]
     
-    # Generate AI response
+    # Generate AI response with user context
     result = await chatbot.generate_response(
         user_message=request.message,
         conversation_history=history,
+        user=current_user,
     )
     
     # Add assistant message
@@ -77,6 +78,7 @@ async def send_message(
         metadata={
             "model": result.get("model", "unknown"),
             "rag_used": result.get("rag_used", False),
+            "user_context_used": result.get("user_context_used", False),
             "sources_count": len(result.get("sources", []))
         }
     )
@@ -103,14 +105,18 @@ async def send_message_anonymous(request: ChatRequest):
     """
     Send a message without authentication.
     Uses a temp conversation per session (no persistence).
+    Uses context field to select appropriate system prompt.
     """
     chatbot = get_chatbot_service()
     await chatbot._initialize()
     
     # Generate response without conversation history for anonymous users
+    # Use context field for role-appropriate responses
     result = await chatbot.generate_response(
         user_message=request.message,
         conversation_history=[],
+        user=None,
+        context=request.context,  # 'candidate' or 'hr'
     )
     
     return ChatResponse(
