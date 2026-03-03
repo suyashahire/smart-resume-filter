@@ -44,7 +44,10 @@ function ResultsContent() {
     addActivity,
     // Session fetch tracking
     hasFetchedSessionData,
-    setHasFetchedSessionData
+    setHasFetchedSessionData,
+    // Results refresh trigger
+    resultsVersion,
+    bumpResultsVersion
   } = useStore();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -86,6 +89,9 @@ function ResultsContent() {
   
   // Kanban board modal state
   const [showKanbanModal, setShowKanbanModal] = useState(false);
+  
+  // Email popup for non-portal candidates
+  const [showEmailPopup, setShowEmailPopup] = useState<{ name: string; email: string } | null>(null);
   
   // Drag and drop state for Kanban
   const [draggedCandidate, setDraggedCandidate] = useState<string | null>(null);
@@ -224,63 +230,107 @@ function ResultsContent() {
   };
 
   // Fetch screening results from API (proper endpoint with scores)
+  const candidateJobAssignmentsRef = useRef(candidateJobAssignments);
+  candidateJobAssignmentsRef.current = candidateJobAssignments;
+  const assignCandidateToJobRef = useRef(assignCandidateToJob);
+  assignCandidateToJobRef.current = assignCandidateToJob;
+
   const fetchScreeningResultsFromApi = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      // First get all jobs to fetch their screening results
-      const jobsData = await api.getJobDescriptions();
-      
-      if (!jobsData || jobsData.length === 0) {
-        // No jobs exist - clear local store to stay in sync
-        setFilteredResumes([]);
-        setResumes([]);
-        return;
-      }
+      // Fetch jobs + uploaded resumes in parallel
+      const [jobsData, uploadedResumes] = await Promise.all([
+        api.getJobDescriptions().catch(() => [] as any[]),
+        api.getResumes().catch(() => [] as api.ResumeResponse[]),
+      ]);
       
       const allScreenedResumes: any[] = [];
       
       // Fetch screening results for each job
-      for (const job of jobsData) {
-        try {
-          const screeningResults = await api.getScreeningResults(job.id);
-          if (screeningResults && screeningResults.length > 0) {
-            // Add job info to each result
-            const resultsWithJob = screeningResults.map((r: any) => ({
-              id: r.id,
-              name: r.name || 'Unknown',
-              email: r.email || '',
-              phone: r.phone || '',
-              skills: r.skills || [],
-              education: r.education || '',
-              experience: r.experience || '',
-              score: r.score || 0,
-              skillMatches: r.skill_matches || [],
-              jobId: job.id,
-              jobTitle: job.title
-            }));
-            allScreenedResumes.push(...resultsWithJob);
+      if (jobsData && jobsData.length > 0) {
+        for (const job of jobsData) {
+          try {
+            const screeningResults = await api.getScreeningResults(job.id);
+            if (screeningResults && screeningResults.length > 0) {
+              const resultsWithJob = screeningResults.map((r: any) => ({
+                id: r.id,
+                name: r.name || 'Unknown',
+                email: r.email || '',
+                phone: r.phone || '',
+                skills: r.skills || [],
+                education: r.education || '',
+                experience: r.experience || '',
+                score: r.score || 0,
+                skillMatches: r.skill_matches || [],
+                jobId: job.id,
+                jobTitle: job.title,
+                source: r.source || 'hr_upload',
+                applicationId: r.application_id,
+                candidateUserId: r.candidate_user_id || null,
+              }));
+              allScreenedResumes.push(...resultsWithJob);
+            }
+          } catch (err) {
+            console.log(`No screening results for job ${job.id}`);
           }
-        } catch (err) {
-          // Job may not have screening results yet, that's okay
-          console.log(`No screening results for job ${job.id}`);
         }
       }
       
-      if (allScreenedResumes.length > 0) {
-        // Deduplicate by resume ID (keep highest score if duplicates)
-        const uniqueResumes = new Map();
-        allScreenedResumes.forEach(r => {
-          const existing = uniqueResumes.get(r.id);
-          if (!existing || r.score > existing.score) {
-            uniqueResumes.set(r.id, r);
+      // Deduplicate screened results by resume+job combo
+      const uniqueResumes = new Map();
+      allScreenedResumes.forEach(r => {
+        const key = `${r.id}-${r.jobId}`;
+        const existing = uniqueResumes.get(key);
+        if (!existing || r.score > existing.score) {
+          uniqueResumes.set(key, r);
+        }
+      });
+      
+      // Merge in uploaded resumes that haven't been screened yet
+      const screenedResumeIds = new Set(allScreenedResumes.map(r => r.id));
+      if (uploadedResumes && uploadedResumes.length > 0) {
+        for (const resume of uploadedResumes) {
+          if (!screenedResumeIds.has(resume.id) && resume.is_parsed && resume.parsed_data) {
+            const pd = resume.parsed_data;
+            uniqueResumes.set(`${resume.id}-unscreened`, {
+              id: resume.id,
+              name: pd.name || resume.file_name || 'Unknown',
+              email: pd.email || '',
+              phone: pd.phone || '',
+              skills: pd.skills || [],
+              education: pd.education || '',
+              experience: pd.experience || '',
+              score: 0,
+              skillMatches: [],
+              jobId: '',
+              jobTitle: '',
+              source: 'hr_upload',
+              applicationId: null,
+              candidateUserId: null,
+              isUnscreened: true,
+            });
           }
-        });
-        
-        const dedupedResumes = Array.from(uniqueResumes.values());
+        }
+      }
+
+      const dedupedResumes = Array.from(uniqueResumes.values());
+      
+      if (dedupedResumes.length > 0) {
         setFilteredResumes(dedupedResumes);
         setResumes(dedupedResumes);
+        
+        // Auto-create candidateJobAssignments for screened candidates
+        dedupedResumes.forEach((r: any) => {
+          if (r.jobId) {
+            const existing = candidateJobAssignmentsRef.current.some(
+              a => a.candidateId === r.id && a.jobId === r.jobId
+            );
+            if (!existing) {
+              assignCandidateToJobRef.current(r.id, r.jobId, r.score || 0);
+            }
+          }
+        });
       } else {
-        // No screening results found - clear local store to stay in sync
         setFilteredResumes([]);
         setResumes([]);
       }
@@ -291,13 +341,22 @@ function ResultsContent() {
     }
   }, [setResumes, setFilteredResumes]);
 
-  // Fetch from API on mount when connected and no local data (only once per session)
+  // Fetch from API on mount when connected (only once per session)
   useEffect(() => {
-    if (useRealApi && isAuthenticated && filteredResumes.length === 0 && !hasFetchedSessionData) {
+    if (useRealApi && isAuthenticated && !hasFetchedSessionData) {
       setHasFetchedSessionData(true);
       fetchScreeningResultsFromApi();
     }
-  }, [useRealApi, isAuthenticated, filteredResumes.length, hasFetchedSessionData, setHasFetchedSessionData, fetchScreeningResultsFromApi]);
+  }, [useRealApi, isAuthenticated, hasFetchedSessionData, setHasFetchedSessionData, fetchScreeningResultsFromApi]);
+
+  // Re-fetch when results version changes (after approval/rejection)
+  const lastResultsVersionRef = useRef(resultsVersion);
+  useEffect(() => {
+    if (resultsVersion > lastResultsVersionRef.current && useRealApi && isAuthenticated) {
+      lastResultsVersionRef.current = resultsVersion;
+      fetchScreeningResultsFromApi();
+    }
+  }, [resultsVersion, useRealApi, isAuthenticated, fetchScreeningResultsFromApi]);
 
   // Re-fetch when URL timestamp changes (after new upload/assignment)
   const lastTimestampRef = useRef<string | null>(null);
@@ -339,10 +398,13 @@ function ResultsContent() {
     
     // Job assignment filter
     if (selectedJobFilter !== 'all') {
+      // Filter by the resume's jobId (set during screening) OR by manual candidateJobAssignments
       const assignedCandidateIds = candidateJobAssignments
         .filter(a => a.jobId === selectedJobFilter)
         .map(a => a.candidateId);
-      candidates = candidates.filter(c => assignedCandidateIds.includes(c.id));
+      candidates = candidates.filter(c => 
+        c.jobId === selectedJobFilter || assignedCandidateIds.includes(c.id)
+      );
     }
     
     // Shortlist filter
@@ -489,7 +551,7 @@ function ResultsContent() {
         `"${candidate.skills.join(', ').replace(/"/g, '""')}"`,
         `"${(candidate.skillMatches || []).join(', ').replace(/"/g, '""')}"`,
         `"${(candidate.experience || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-        `"${(candidate.education || '').replace(/"/g, '""').replace(/\n/g, ' ')}""`
+        `"${(candidate.education || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`
       ].join(',');
     });
 
@@ -768,11 +830,17 @@ function ResultsContent() {
                     className="appearance-none pl-10 pr-10 py-2.5 bg-blue-50/80 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/50 ring-1 ring-blue-500/20 transition-all"
                   >
                     <option value="all">All Candidates</option>
-                    {jobs.map((job) => (
-                      <option key={job.id} value={job.id}>
-                        {job.title} ({candidateJobAssignments.filter(a => a.jobId === job.id).length})
-                      </option>
-                    ))}
+                    {jobs.map((job) => {
+                      // Count candidates from screening results (includes portal applicants) + manual assignments
+                      const screenedForJob = filteredResumes.filter(r => r.jobId === job.id).length;
+                      const manuallyAssigned = candidateJobAssignments.filter(a => a.jobId === job.id && !filteredResumes.some(r => r.id === a.candidateId && r.jobId === job.id)).length;
+                      const totalCount = screenedForJob + manuallyAssigned;
+                      return (
+                        <option key={job.id} value={job.id}>
+                          {job.title} ({totalCount})
+                        </option>
+                      );
+                    })}
                   </select>
                   <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
                   <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 rotate-90" />
@@ -1139,7 +1207,7 @@ function ResultsContent() {
                 <div className={`absolute inset-0 rounded-3xl transition-opacity duration-500 ${
                   hoveredCard === candidate.id ? 'opacity-100' : 'opacity-0'
                 }`}>
-                  <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r ${getScoreColor(candidate.score)} p-[1px]`}>
+                  <div className={`absolute inset-0 rounded-3xl bg-gradient-to-r ${candidate.isUnscreened ? 'from-gray-400 via-slate-500 to-gray-600' : getScoreColor(candidate.score)} p-[1px]`}>
                     <div className="absolute inset-[1px] rounded-3xl bg-white dark:bg-gray-900"></div>
                   </div>
                 </div>
@@ -1151,7 +1219,7 @@ function ResultsContent() {
                   {/* Rank & Score Section - Premium circular gauge design */}
                   <div 
                     onClick={() => toggleSelect(candidate.id)}
-                    className={`relative lg:w-44 flex flex-col items-center justify-center p-6 lg:p-8 bg-gradient-to-br ${getScoreColor(candidate.score)} cursor-pointer transition-all duration-300 group-hover:brightness-105`}
+                    className={`relative lg:w-44 flex flex-col items-center justify-center p-6 lg:p-8 bg-gradient-to-br ${candidate.isUnscreened ? 'from-gray-400 via-slate-500 to-gray-600' : getScoreColor(candidate.score)} cursor-pointer transition-all duration-300 group-hover:brightness-105`}
                   >
                     {/* Selection checkbox */}
                     <motion.div
@@ -1197,8 +1265,17 @@ function ResultsContent() {
                       </svg>
                       {/* Score text */}
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-4xl lg:text-5xl font-black text-white drop-shadow-lg">{Math.round(candidate.score)}</span>
-                        <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">Match %</span>
+                        {candidate.isUnscreened ? (
+                          <>
+                            <span className="text-lg lg:text-xl font-bold text-white/80">N/A</span>
+                            <span className="text-[10px] font-semibold text-white/60 uppercase tracking-wider">Not Scored</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-4xl lg:text-5xl font-black text-white drop-shadow-lg">{Math.round(candidate.score)}</span>
+                            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">Match %</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     
@@ -1214,10 +1291,24 @@ function ResultsContent() {
                         {/* Name & Badge Row */}
                         <div className="flex flex-wrap items-center gap-3">
                           <h3 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">{candidate.name}</h3>
-                          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm ${getScoreBadge(candidate.score).color}`}>
-                            {getScoreBadge(candidate.score).icon}
-                            {getScoreBadge(candidate.score).label}
-                          </span>
+                          {candidate.isUnscreened ? (
+                            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm bg-gradient-to-r from-gray-500/20 to-slate-500/20 text-gray-600 dark:text-gray-400 ring-1 ring-gray-500/30 shadow-lg shadow-gray-500/10">
+                              <Clock className="h-3.5 w-3.5" />
+                              Not Scored Yet
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm ${getScoreBadge(candidate.score).color}`}>
+                              {getScoreBadge(candidate.score).icon}
+                              {getScoreBadge(candidate.score).label}
+                            </span>
+                          )}
+                          {/* Source Badge */}
+                          {candidate.source === 'candidate_portal' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-teal-500/20 to-cyan-500/20 text-teal-600 dark:text-teal-400 text-xs font-bold ring-1 ring-teal-500/30 shadow-lg shadow-teal-500/10">
+                              <Users className="h-3.5 w-3.5" />
+                              Applied via Portal
+                            </span>
+                          )}
                           {shortlistedIds.has(candidate.id) && (
                             <motion.span 
                               initial={{ scale: 0.8, opacity: 0 }}
@@ -1388,7 +1479,7 @@ function ResultsContent() {
                                   {pipelineStatuses.map((status) => (
                                     <button
                                       key={status.value}
-                                      onClick={() => {
+                                      onClick={async () => {
                                         updateCandidateJobStatus(candidate.id, selectedJobFilter, status.value);
                                         addActivity({
                                           type: 'status_changed',
@@ -1398,6 +1489,14 @@ function ResultsContent() {
                                           metadata: { newStatus: status.value }
                                         });
                                         setShowStatusDropdown(null);
+                                        // Persist to backend & notify candidate
+                                        if (candidate.applicationId) {
+                                          try {
+                                            await api.updateApplicationStatus(candidate.applicationId, status.value);
+                                          } catch (err) {
+                                            console.error('Failed to update application status:', err);
+                                          }
+                                        }
                                       }}
                                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
                                     >
@@ -1560,6 +1659,31 @@ function ResultsContent() {
                             </motion.button>
                           </Link>
                           
+                          {candidate.candidateUserId ? (
+                            <Link href={`/messages?candidateId=${candidate.candidateUserId}&name=${encodeURIComponent(candidate.name)}`} className="flex-1">
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="w-full px-3 py-2.5 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-xl text-sm font-semibold hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Send className="h-4 w-4" />
+                                Message
+                              </motion.button>
+                            </Link>
+                          ) : (
+                            <div className="flex-1">
+                              <motion.button
+                                onClick={() => setShowEmailPopup({ name: candidate.name, email: candidate.email })}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Mail className="h-4 w-4" />
+                                Message
+                              </motion.button>
+                            </div>
+                          )}
+                          
                           <Link href={`/interview-analyzer?candidateId=${candidate.id}`} className="flex-1">
                             <motion.button
                               whileHover={{ scale: 1.02 }}
@@ -1687,6 +1811,12 @@ function ResultsContent() {
                                 jobId: selectedJobFilter,
                                 metadata: { newStatus: status.value }
                               });
+                              // Persist to backend & notify candidate
+                              if (candidate.applicationId) {
+                                api.updateApplicationStatus(candidate.applicationId, status.value).catch(err =>
+                                  console.error('Failed to update application status:', err)
+                                );
+                              }
                             }
                           }
                           setDraggedCandidate(null);
@@ -1799,6 +1929,21 @@ function ResultsContent() {
                                           <FileText className="h-4 w-4" />
                                         </button>
                                       </Link>
+                                      {candidate.candidateUserId ? (
+                                        <Link href={`/messages?candidateId=${candidate.candidateUserId}&name=${encodeURIComponent(candidate.name)}`}>
+                                          <button className="p-2 rounded-xl hover:bg-teal-100 dark:hover:bg-teal-900/30 text-teal-600 dark:text-teal-400 transition-all" title="Message Candidate">
+                                            <Send className="h-4 w-4" />
+                                          </button>
+                                        </Link>
+                                      ) : (
+                                        <button
+                                          onClick={() => setShowEmailPopup({ name: candidate.name, email: candidate.email })}
+                                          className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-all"
+                                          title="Not on portal - Email instead"
+                                        >
+                                          <Mail className="h-4 w-4" />
+                                        </button>
+                                      )}
                                       <Link href={`/interview-analyzer?candidateId=${candidate.id}`}>
                                         <button className="p-2 rounded-xl hover:bg-primary-100 dark:hover:bg-primary-900/30 text-primary-600 dark:text-primary-400 transition-all" title="Interview">
                                           <MessageSquare className="h-4 w-4" />
@@ -1815,6 +1960,79 @@ function ResultsContent() {
                     );
                   })}
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Email Popup for Non-Portal Candidates */}
+      <AnimatePresence>
+        {showEmailPopup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            onClick={() => setShowEmailPopup(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-6 py-5 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Candidate Not on Portal</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">In-app messaging unavailable</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Body */}
+              <div className="px-6 py-5 space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <span className="font-semibold text-gray-900 dark:text-white">{showEmailPopup.name}</span> was uploaded via resume and hasn&apos;t registered on the candidate portal. You can reach them via email instead.
+                </p>
+                
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <Mail className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{showEmailPopup.email}</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(showEmailPopup.email);
+                    }}
+                    className="ml-auto p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition-colors flex-shrink-0"
+                    title="Copy email"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+                <button
+                  onClick={() => setShowEmailPopup(null)}
+                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Close
+                </button>
+                <a
+                  href={`mailto:${showEmailPopup.email}?subject=Regarding Your Application&body=Hi ${showEmailPopup.name},%0D%0A%0D%0A`}
+                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-primary-500 to-purple-600 rounded-xl shadow-md hover:shadow-lg transition-all text-center flex items-center justify-center gap-2"
+                  onClick={() => setShowEmailPopup(null)}
+                >
+                  <Mail className="h-4 w-4" />
+                  Open Email Client
+                </a>
               </div>
             </motion.div>
           </motion.div>

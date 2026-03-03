@@ -30,6 +30,7 @@ import {
   getOpenJobs,
   getCandidateProfile,
 } from '@/lib/api';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import {
   KpiCard,
   DashboardSection,
@@ -50,6 +51,7 @@ interface DashboardStats {
   screening: number;
   interview: number;
   offers: number;
+  hired: number;
   rejected: number;
 }
 
@@ -59,6 +61,7 @@ const kpiConfig = [
   { key: 'screening', label: 'Screening', icon: Search, accent: 'bg-amber-500' },
   { key: 'interview', label: 'Interview', icon: Users, accent: 'bg-purple-500' },
   { key: 'offers', label: 'Offers', icon: Gift, accent: 'bg-green-500' },
+  { key: 'hired', label: 'Hired', icon: Target, accent: 'bg-emerald-500' },
   { key: 'rejected', label: 'Rejected', icon: XCircle, accent: 'bg-red-500' },
 ];
 
@@ -155,7 +158,7 @@ function ProfileRing({ percent }: { percent: number }) {
 export default function CandidateDashboardPage() {
   const { user } = useStore();
   const [stats, setStats] = useState<DashboardStats>({
-    total: 0, pending: 0, screening: 0, interview: 0, offers: 0, rejected: 0,
+    total: 0, pending: 0, screening: 0, interview: 0, offers: 0, hired: 0, rejected: 0,
   });
   const [recommendedJobs, setRecommendedJobs] = useState<any[]>([]);
   const [recentApplications, setRecentApplications] = useState<any[]>([]);
@@ -175,8 +178,9 @@ export default function CandidateDashboardPage() {
       const screening = apps.filter((a: any) => a.status === 'screening').length;
       const interview = apps.filter((a: any) => a.status === 'interview').length;
       const offers = apps.filter((a: any) => a.status === 'offer').length;
+      const hired = apps.filter((a: any) => a.status === 'hired').length;
       const rejected = apps.filter((a: any) => a.status === 'rejected').length;
-      setStats({ total, pending, screening, interview, offers, rejected });
+      setStats({ total, pending, screening, interview, offers, hired, rejected });
 
       const filtered = (jobsData || []).filter(
         (j: { title?: string }) => j.title?.trim() !== 'Full Stack Developer'
@@ -195,6 +199,15 @@ export default function CandidateDashboardPage() {
     setIsLoading(true);
     fetchData();
   }, [fetchData]);
+
+  // Re-fetch when application status changes via WebSocket
+  useRealtimeUpdates({
+    onEvent: (event) => {
+      if (event.type === 'application_status_changed') {
+        fetchData();
+      }
+    },
+  });
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -301,7 +314,7 @@ export default function CandidateDashboardPage() {
         <div className="h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700/80 to-transparent mb-7" aria-hidden />
 
         {/* ═══ KPI ROW ═══ */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4 mb-8">
           {kpiConfig.map((item, i) => (
             <KpiCard
               key={item.key}

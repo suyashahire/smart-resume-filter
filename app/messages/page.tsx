@@ -1,36 +1,27 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import {
   MessageSquare,
   Send,
   Search,
-  User,
-  Clock,
   CheckCheck,
   ArrowLeft,
   Briefcase,
-  Paperclip,
-  Smile,
-  MoreVertical,
-  Phone,
-  Video,
-  Info,
-  Filter,
-  Sparkles,
   ArrowRight,
-  Building,
   Mail,
-  Calendar,
   Check,
-  UserPlus,
   FileText,
-} from 'lucide-react';
-import { useStore } from '@/store/useStore';
-import * as api from '@/lib/api';
+  X,
+  AlertCircle,
+  Trash2,
+} from "lucide-react";
+import { useStore } from "@/store/useStore";
+import * as api from "@/lib/api";
 
 // ============================================================================
 // INTERFACES
@@ -64,10 +55,8 @@ interface Conversation {
 // ============================================================================
 
 const conversationFilters = [
-  { value: 'all', label: 'All' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
+  { value: "all", label: "All Chats" },
+  { value: "unread", label: "Unread" },
 ];
 
 // ============================================================================
@@ -79,92 +68,92 @@ interface ConversationItemProps {
   conversation: Conversation;
   isSelected: boolean;
   onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
   formatTime: (date: string) => string;
 }
 
-function ConversationItem({ conversation, isSelected, onClick, formatTime }: ConversationItemProps) {
+function ConversationItem({
+  conversation,
+  isSelected,
+  onClick,
+  onDelete,
+  formatTime,
+}: ConversationItemProps) {
   const hasUnread = (conversation.unread_count_hr || 0) > 0;
+  const displayName =
+    conversation.candidate_user_name || "Unknown Candidate";
 
   return (
-    <motion.button
+    <motion.div
       onClick={onClick}
-      whileHover={{ x: 2 }}
-      whileTap={{ scale: 0.98 }}
-      className={`w-full p-4 text-left transition-all duration-200 relative group ${
+      className={`group relative flex items-start gap-3 p-3 mx-2 rounded-lg cursor-pointer transition-all duration-150 ${
         isSelected
-          ? 'bg-gradient-to-r from-primary-500/10 to-purple-500/10'
-          : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+          ? "bg-primary-50 dark:bg-primary-950/30 border border-primary-200/60 dark:border-primary-800/40"
+          : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
       }`}
     >
-      {/* Active Indicator */}
-      {isSelected && (
-        <motion.div
-          layoutId="activeHRConversation"
-          className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary-500 to-purple-500 rounded-r-full"
-        />
-      )}
+      {/* Letter Avatar */}
+      <div
+        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+          isSelected
+            ? "bg-primary-500/15 text-primary-600 dark:text-primary-400 border border-primary-500/25"
+            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200/60 dark:border-gray-700/60"
+        }`}
+      >
+        {displayName.charAt(0).toUpperCase()}
+      </div>
 
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-candidate-500 to-cyan-500 flex items-center justify-center shadow-md ${
-            isSelected ? 'shadow-candidate-500/25' : ''
-          }`}>
-            <User className="h-6 w-6 text-white" />
-          </div>
-          {/* Online Indicator (placeholder) */}
-          <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" />
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={`text-sm truncate ${
+              hasUnread
+                ? "font-semibold text-gray-900 dark:text-white"
+                : "font-medium text-gray-700 dark:text-gray-300"
+            }`}
+          >
+            {displayName}
+          </span>
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+            {formatTime(conversation.last_message_at)}
+          </span>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className={`font-semibold truncate ${
+        {conversation.job_title && (
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate flex items-center gap-1 mt-0.5">
+            <Briefcase className="h-2.5 w-2.5 flex-shrink-0" />
+            {conversation.job_title}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between mt-0.5">
+          <p
+            className={`text-xs truncate ${
               hasUnread
-                ? 'text-gray-900 dark:text-white'
-                : 'text-gray-700 dark:text-gray-300'
-            }`}>
-              {conversation.candidate_user_name || 'Unknown Candidate'}
-            </h3>
-            <span className={`text-xs flex-shrink-0 ml-2 ${
-              hasUnread
-                ? 'text-primary-600 dark:text-primary-400 font-medium'
-                : 'text-gray-500 dark:text-gray-500'
-            }`}>
-              {formatTime(conversation.last_message_at)}
+                ? "text-gray-700 dark:text-gray-300 font-medium"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {conversation.last_message_preview || "No messages yet"}
+          </p>
+          {hasUnread && (
+            <span className="px-1.5 py-0.5 bg-primary-500 text-white text-[10px] font-bold rounded-full min-w-[18px] text-center flex-shrink-0 ml-2">
+              {conversation.unread_count_hr}
             </span>
-          </div>
-
-          {/* Job Info */}
-          {conversation.job_title && (
-            <div className="flex items-center gap-1.5 mb-1">
-              <Briefcase className="h-3 w-3 text-primary-500" />
-              <span className="text-xs text-primary-600 dark:text-primary-400 truncate">
-                {conversation.job_title}
-              </span>
-            </div>
           )}
-
-          {/* Last Message */}
-          <div className="flex items-center justify-between">
-            <p className={`text-sm truncate ${
-              hasUnread
-                ? 'text-gray-800 dark:text-gray-200 font-medium'
-                : 'text-gray-500 dark:text-gray-500'
-            }`}>
-              {conversation.last_message_preview || 'No messages yet'}
-            </p>
-
-            {/* Unread Badge */}
-            {hasUnread && (
-              <span className="w-5 h-5 bg-gradient-to-r from-primary-500 to-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center flex-shrink-0 ml-2 shadow-md shadow-primary-500/25">
-                {conversation.unread_count_hr}
-              </span>
-            )}
-          </div>
         </div>
       </div>
-    </motion.button>
+
+      {/* Delete on hover */}
+      <button
+        onClick={onDelete}
+        className="absolute bottom-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+        title="Delete conversation"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </motion.div>
   );
 }
 
@@ -175,36 +164,38 @@ interface MessageBubbleProps {
   formatTime: (date: string) => string;
 }
 
-function MessageBubble({ message, isOwn, formatTime }: MessageBubbleProps) {
+function MessageBubble({
+  message,
+  isOwn,
+  formatTime,
+}: MessageBubbleProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
     >
-      <div className={`max-w-[75%] ${isOwn ? 'order-2' : 'order-1'}`}>
+      <div
+        className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+          isOwn
+            ? "bg-primary-500 text-white rounded-br-md"
+            : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200/60 dark:border-gray-700/60 rounded-bl-md"
+        }`}
+      >
+        <p className="whitespace-pre-wrap break-words">{message.content}</p>
         <div
-          className={`relative px-4 py-3 rounded-2xl ${
-            isOwn
-              ? 'bg-gradient-to-r from-primary-500 to-purple-500 text-white rounded-br-md shadow-lg shadow-primary-500/20'
-              : 'bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-gray-900 dark:text-white rounded-bl-md border border-gray-200/50 dark:border-gray-700/50'
+          className={`flex items-center justify-end gap-1 mt-1 ${
+            isOwn ? "text-white/60" : "text-gray-400 dark:text-gray-500"
           }`}
         >
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
-        </div>
-        <div className={`flex items-center gap-1.5 mt-1.5 text-xs text-gray-500 ${
-          isOwn ? 'justify-end' : 'justify-start'
-        }`}>
-          <span>{formatTime(message.sent_at)}</span>
-          {isOwn && (
-            <span className="flex items-center">
-              {message.read_at ? (
-                <CheckCheck className="h-3.5 w-3.5 text-primary-500" />
-              ) : (
-                <Check className="h-3.5 w-3.5 text-gray-400" />
-              )}
-            </span>
-          )}
+          <span className="text-[10px]">{formatTime(message.sent_at)}</span>
+          {isOwn &&
+            (message.read_at ? (
+              <CheckCheck className="h-3 w-3" />
+            ) : (
+              <Check className="h-3 w-3" />
+            ))}
         </div>
       </div>
     </motion.div>
@@ -220,65 +211,53 @@ interface MessageComposerProps {
   disabled?: boolean;
 }
 
-function MessageComposer({ value, onChange, onSubmit, isSending, disabled }: MessageComposerProps) {
+function MessageComposer({
+  value,
+  onChange,
+  onSubmit,
+  isSending,
+  disabled,
+}: MessageComposerProps) {
+  const canSend = value.trim().length > 0 && !isSending && !disabled;
+
   return (
-    <div className="p-4 bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-700/50">
+    <div className="flex-shrink-0 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
       {disabled ? (
-        <div className="flex items-center justify-center py-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-xl">
+        <div className="flex items-center justify-center py-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-xl">
           <Mail className="h-4 w-4 mr-2" />
           Messaging is currently unavailable
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="flex items-end gap-3">
-          {/* Attachment Button */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-2.5 text-gray-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-xl transition-colors"
-          >
-            <Paperclip className="h-5 w-5" />
-          </motion.button>
-
-          {/* Input Field */}
-          <div className="flex-1 relative">
-            <textarea
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder="Type your message..."
-              rows={1}
-              className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none transition-all"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  onSubmit(e);
-                }
-              }}
-            />
-          </div>
-
-          {/* Emoji Button */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-2.5 text-gray-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-xl transition-colors"
-          >
-            <Smile className="h-5 w-5" />
-          </motion.button>
-
-          {/* Send Button */}
+        <form onSubmit={onSubmit} className="flex items-end gap-2">
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Type your message..."
+            rows={1}
+            className="flex-1 resize-none rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700/60 px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500/40 transition-all max-h-32"
+            style={{ minHeight: "40px" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (canSend) onSubmit(e);
+              }
+            }}
+          />
           <motion.button
             type="submit"
-            disabled={!value.trim() || isSending}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-3 bg-gradient-to-r from-primary-500 to-purple-500 text-white rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+            disabled={!canSend}
+            whileHover={canSend ? { scale: 1.05 } : {}}
+            whileTap={canSend ? { scale: 0.95 } : {}}
+            className={`p-2.5 rounded-xl transition-all flex-shrink-0 ${
+              canSend
+                ? "bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/25"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
+            }`}
           >
             {isSending ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              <Send className="h-5 w-5" />
+              <Send className="h-4 w-4" />
             )}
           </motion.button>
         </form>
@@ -288,65 +267,30 @@ function MessageComposer({ value, onChange, onSubmit, isSending, disabled }: Mes
 }
 
 // Empty State Component
-interface EmptyStateProps {
-  type: 'no-conversation' | 'no-messages';
-}
-
-function EmptyState({ type }: EmptyStateProps) {
+function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8">
-      {/* Background Decorations */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-primary-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 left-1/4 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl" />
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-primary-500/10 dark:bg-primary-500/15 border border-primary-500/20 flex items-center justify-center mb-5">
+        <MessageSquare className="h-8 w-8 text-primary-500/60" />
       </div>
-
-      <div className="relative">
-        {/* Icon */}
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-500/10 to-purple-500/10 border border-primary-200/50 dark:border-primary-700/50 flex items-center justify-center mb-6 mx-auto">
-          <motion.div
-            animate={{
-              y: [0, -4, 0],
-            }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          >
-            <MessageSquare className="h-12 w-12 text-primary-500" />
-          </motion.div>
-        </div>
-
-        {/* Title */}
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 text-center">
-          {type === 'no-conversation' ? 'Candidate Messages' : 'No messages yet'}
-        </h3>
-
-        {/* Description */}
-        <p className="text-gray-600 dark:text-gray-400 text-center max-w-sm mb-8">
-          {type === 'no-conversation'
-            ? 'Select a conversation to view messages, or start a new conversation with a candidate from the Results page.'
-            : 'Start the conversation! Send a message to connect with this candidate.'}
-        </p>
-
-        {/* CTA */}
-        {type === 'no-conversation' && (
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href="/results">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-purple-500 text-white rounded-xl font-medium shadow-lg shadow-primary-500/25"
-              >
-                <FileText className="h-4 w-4" />
-                View Candidates
-                <ArrowRight className="h-4 w-4" />
-              </motion.button>
-            </Link>
-          </div>
-        )}
-      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+        Candidate Messages
+      </h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-6 leading-relaxed">
+        Select a conversation to view messages, or start a new one from the
+        Results page.
+      </p>
+      <Link href="/results">
+        <motion.span
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/20 transition-colors"
+        >
+          <FileText className="h-4 w-4" />
+          View Candidates
+          <ArrowRight className="h-4 w-4" />
+        </motion.span>
+      </Link>
     </div>
   );
 }
@@ -355,37 +299,127 @@ function EmptyState({ type }: EmptyStateProps) {
 // MAIN PAGE COMPONENT
 // ============================================================================
 
-export default function HRMessagesPage() {
+function HRMessagesContent() {
   const router = useRouter();
-  const { user, isAuthenticated, isHydrated, conversations, setConversations, currentConversationMessages, setCurrentConversationMessages, addMessage } = useStore();
+  const searchParams = useSearchParams();
+  const candidateIdParam = searchParams.get("candidateId");
+  const candidateNameParam = searchParams.get("name");
+  const {
+    user,
+    isAuthenticated,
+    isHydrated,
+    conversations,
+    setConversations,
+    currentConversationMessages,
+    setCurrentConversationMessages,
+    addMessage,
+  } = useStore();
 
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  const [newMessage, setNewMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [selectedConversation, setSelectedConversation] =
+    useState<Conversation | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [candidateHandled, setCandidateHandled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const selectedConversationRef = useRef<Conversation | null>(null);
+
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  // Real-time message updates via WebSocket
+  useRealtimeUpdates({
+    userId: user?.id,
+    enabled: isAuthenticated && isHydrated,
+    onEvent: useCallback(
+      (event) => {
+        if (event.type === "new_message") {
+          const data = event.data as any;
+          const currentConv = selectedConversationRef.current;
+          if (
+            currentConv &&
+            currentConv.id !== "new" &&
+            data.conversation_id === currentConv.id
+          ) {
+            api
+              .getConversationMessages(currentConv.id)
+              .then((res) => {
+                setCurrentConversationMessages(res.messages || []);
+              })
+              .catch(() => {});
+          }
+          api
+            .getConversations()
+            .then((res) => {
+              const hrConversations = (res.conversations || []).map(
+                (c: any) => ({
+                  ...c,
+                  candidate_user_id:
+                    c.other_user?.id || c.candidate_user_id,
+                  candidate_user_name:
+                    c.other_user?.name || c.candidate_user_name,
+                  candidate_email:
+                    c.other_user?.email || c.candidate_email,
+                  unread_count_hr:
+                    c.unread_count ?? c.unread_count_hr ?? 0,
+                })
+              );
+              setConversations(hrConversations);
+            })
+            .catch(() => {});
+        }
+      },
+      [setConversations, setCurrentConversationMessages]
+    ),
+  });
 
   useEffect(() => {
     if (!isHydrated) return;
-
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
-
-    if (user?.role === 'candidate') {
-      router.push('/candidate/messages');
+    if (user?.role === "candidate") {
+      router.push("/candidate/messages");
       return;
     }
-
     fetchConversations();
   }, [isAuthenticated, isHydrated, user, router]);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentConversationMessages]);
+
+  useEffect(() => {
+    if (!candidateIdParam || candidateHandled || isLoading || !conversations)
+      return;
+    const existing = conversations.find(
+      (c: any) =>
+        c.candidate_user_id === candidateIdParam ||
+        c.other_user?.id === candidateIdParam
+    );
+    if (existing) {
+      handleSelectConversation(existing as Conversation);
+      setCandidateHandled(true);
+    } else if (conversations.length >= 0) {
+      const placeholder: Conversation = {
+        id: "new",
+        candidate_user_id: candidateIdParam,
+        candidate_user_name: candidateNameParam || "Candidate",
+        last_message_at: new Date().toISOString(),
+        last_message_preview: "",
+        unread_count_hr: 0,
+      };
+      setSelectedConversation(placeholder);
+      setCurrentConversationMessages([]);
+      setCandidateHandled(true);
+    }
+  }, [candidateIdParam, candidateHandled, isLoading, conversations]);
 
   const fetchConversations = async () => {
     try {
@@ -393,11 +427,14 @@ export default function HRMessagesPage() {
       const data = await api.getConversations();
       const hrConversations = (data.conversations || []).map((c: any) => ({
         ...c,
-        unread_count_hr: c.unread_count_hr || 0
+        candidate_user_id: c.other_user?.id || c.candidate_user_id,
+        candidate_user_name: c.other_user?.name || c.candidate_user_name,
+        candidate_email: c.other_user?.email || c.candidate_email,
+        unread_count_hr: c.unread_count ?? c.unread_count_hr ?? 0,
       }));
       setConversations(hrConversations);
     } catch (err) {
-      console.error('Failed to fetch conversations:', err);
+      console.error("Failed to fetch conversations:", err);
     } finally {
       setIsLoading(false);
     }
@@ -407,18 +444,14 @@ export default function HRMessagesPage() {
     try {
       const data = await api.getConversationMessages(conversationId);
       setCurrentConversationMessages(data.messages || []);
-
       await api.markMessagesAsRead(conversationId);
-
       setConversations(
-        conversations.map(c =>
-          c.id === conversationId
-            ? { ...c, unread_count_hr: 0 }
-            : c
+        conversations.map((c) =>
+          c.id === conversationId ? { ...c, unread_count_hr: 0 } : c
         )
       );
     } catch (err) {
-      console.error('Failed to fetch messages:', err);
+      console.error("Failed to fetch messages:", err);
     }
   };
 
@@ -427,37 +460,88 @@ export default function HRMessagesPage() {
     fetchMessages(conversation.id);
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || !selectedConversation.candidate_user_id) return;
-
+  const handleDeleteConversation = async (conversationId: string) => {
     try {
-      setIsSending(true);
-      const message = await api.sendMessage(
-        selectedConversation.id,
-        selectedConversation.candidate_user_id,
-        newMessage.trim()
-      );
-
-      addMessage(message);
-      setNewMessage('');
-
-      setConversations(
-        conversations.map(c =>
-          c.id === selectedConversation.id
-            ? { ...c, last_message_preview: newMessage.trim(), last_message_at: new Date().toISOString() }
-            : c
-        )
-      );
+      await api.deleteConversation(conversationId);
+      setConversations(conversations.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setCurrentConversationMessages([]);
+      }
+      setDeleteConfirm(null);
     } catch (err) {
-      console.error('Failed to send message:', err);
-    } finally {
-      setIsSending(false);
+      console.error("Failed to delete conversation:", err);
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !newMessage.trim() ||
+      !selectedConversation ||
+      !selectedConversation.candidate_user_id
+    )
+      return;
+
+    try {
+      setIsSending(true);
+      const sentText = newMessage.trim();
+      const message = await api.sendMessage(
+        selectedConversation.candidate_user_id,
+        sentText,
+        selectedConversation.job_id
+      );
+      addMessage(message);
+      setNewMessage("");
+
+      if (selectedConversation.id === "new") {
+        const data = await api.getConversations();
+        const hrConversations = (data.conversations || []).map((c: any) => ({
+          ...c,
+          candidate_user_id: c.other_user?.id || c.candidate_user_id,
+          candidate_user_name: c.other_user?.name || c.candidate_user_name,
+          candidate_email: c.other_user?.email || c.candidate_email,
+          unread_count_hr: c.unread_count ?? c.unread_count_hr ?? 0,
+        }));
+        setConversations(hrConversations);
+        const newConv = hrConversations.find(
+          (c: any) =>
+            c.candidate_user_id === selectedConversation.candidate_user_id
+        );
+        if (newConv) {
+          setSelectedConversation(newConv as Conversation);
+        }
+      } else {
+        setConversations(
+          conversations.map((c) =>
+            c.id === selectedConversation.id
+              ? {
+                  ...c,
+                  last_message_preview: sentText,
+                  last_message_at: new Date().toISOString(),
+                }
+              : c
+          )
+        );
+      }
+    } catch (err: any) {
+      console.error("Failed to send message:", err);
+      const errorMsg = err?.message || "Failed to send message";
+      if (errorMsg.includes("Receiver not found")) {
+        setSendError(
+          "This candidate does not have a portal account. Use email to reach them instead."
+        );
+      } else if (errorMsg.includes("only message candidates")) {
+        setSendError(
+          "This user is not registered as a candidate on the portal."
+        );
+      } else {
+        setSendError(errorMsg);
+      }
+      setTimeout(() => setSendError(null), 6000);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const formatTime = (dateString: string) => {
@@ -465,82 +549,85 @@ export default function HRMessagesPage() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
     if (days === 0) {
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     } else if (days === 1) {
-      return 'Yesterday';
+      return "Yesterday";
     } else if (days < 7) {
-      return date.toLocaleDateString('en-US', { weekday: 'short' });
+      return date.toLocaleDateString("en-US", { weekday: "short" });
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
     }
   };
 
-  // Filter conversations
-  const filteredConversations = conversations.filter(c => {
+  const filteredConversations = conversations.filter((c) => {
     const matchesSearch =
-      c.candidate_user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.candidate_user_name
+        ?.toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
       c.job_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.candidate_email?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    if (activeFilter === 'unread') {
+    if (activeFilter === "unread") {
       return matchesSearch && (c.unread_count_hr || 0) > 0;
     }
     return matchesSearch;
   });
 
-  const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count_hr || 0), 0);
+  const totalUnread = conversations.reduce(
+    (sum, c) => sum + (c.unread_count_hr || 0),
+    0
+  );
 
-  // Show loading while hydrating
   if (!isHydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-3 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pt-24 pb-8">
-      {/* Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-50 via-gray-50 to-primary-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-primary-950/20 -z-10" />
-      <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-primary-500/5 to-transparent rounded-full blur-3xl -z-10" />
-      <div className="fixed bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-br from-purple-500/5 to-transparent rounded-full blur-3xl -z-10" />
+      <div className="fixed inset-0 bg-gray-50 dark:bg-gray-950 -z-10" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
+          className="mb-5"
         >
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
             Messages
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Communicate with candidates about their applications
           </p>
         </motion.div>
 
         {/* Chat Container */}
-        <div className="h-[calc(100vh-220px)] flex bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden shadow-xl shadow-gray-200/50 dark:shadow-gray-900/50">
-          {/* ================================================================ */}
+        <div className="h-[calc(100vh-200px)] flex gap-4">
+          {/* ============================================================ */}
           {/* CONVERSATIONS SIDEBAR */}
-          {/* ================================================================ */}
-          <div className={`w-full md:w-[340px] lg:w-[380px] border-r border-gray-200/50 dark:border-gray-700/50 flex flex-col bg-white/50 dark:bg-gray-900/50 ${
-            selectedConversation ? 'hidden md:flex' : 'flex'
-          }`}>
+          {/* ============================================================ */}
+          <div
+            className={`w-full md:w-[320px] lg:w-[340px] flex-shrink-0 flex flex-col rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white dark:bg-gray-900 shadow-sm overflow-hidden ${
+              selectedConversation ? "hidden md:flex" : "flex"
+            }`}
+          >
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-200/50 dark:border-gray-700/50">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center">
-                    <MessageSquare className="h-4 w-4 text-white" />
-                  </div>
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   Conversations
                   {totalUnread > 0 && (
-                    <span className="px-2 py-0.5 bg-gradient-to-r from-primary-500 to-purple-500 text-white text-xs font-bold rounded-full shadow-md shadow-primary-500/25">
+                    <span className="px-2 py-0.5 bg-primary-500 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
                       {totalUnread}
                     </span>
                   )}
@@ -548,58 +635,76 @@ export default function HRMessagesPage() {
               </div>
 
               {/* Search */}
-              <div className="relative group mb-4">
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-primary-500/20 to-purple-500/20 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-300" />
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-primary-500 transition-colors" />
-                  <input
-                    type="text"
-                    placeholder="Search candidates..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-                  />
-                </div>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search candidates..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 rounded-lg text-sm border border-gray-200/60 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500/40 transition-all"
+                />
               </div>
 
               {/* Filter Tabs */}
-              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200/40 dark:border-gray-700/40">
                 {conversationFilters.map((filter) => (
                   <button
                     key={filter.value}
                     onClick={() => setActiveFilter(filter.value)}
-                    className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
                       activeFilter === filter.value
-                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                     }`}
                   >
                     {filter.label}
+                    {filter.value === "unread" && totalUnread > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 bg-primary-500/15 text-primary-600 dark:text-primary-400 text-[10px] font-bold rounded-full">
+                        {totalUnread}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Conversations List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto py-1">
               {isLoading ? (
-                <div className="flex items-center justify-center h-40">
-                  <div className="w-8 h-8 border-2 border-primary-200 border-t-primary-500 rounded-full animate-spin" />
+                <div className="flex items-center justify-center h-32">
+                  <div className="w-7 h-7 border-2 border-primary-200 dark:border-primary-800 border-t-primary-500 rounded-full animate-spin" />
                 </div>
               ) : filteredConversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-500 dark:text-gray-400 p-4">
-                  <MessageSquare className="h-10 w-10 mb-3 opacity-30" />
-                  <p className="text-sm text-center">No conversations yet</p>
-                  <p className="text-xs text-center mt-1 text-gray-400">Start a conversation from the Results page</p>
+                <div className="flex flex-col items-center justify-center h-32 text-center px-4">
+                  <MessageSquare className="h-8 w-8 text-gray-300 dark:text-gray-600 mb-2" />
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {activeFilter === "unread"
+                      ? "No unread messages"
+                      : "No conversations yet"}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                    {activeFilter === "unread"
+                      ? "You're all caught up!"
+                      : "Start from the Results page"}
+                  </p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                <div className="space-y-0.5">
                   {filteredConversations.map((conversation) => (
                     <ConversationItem
                       key={conversation.id}
                       conversation={conversation}
-                      isSelected={selectedConversation?.id === conversation.id}
-                      onClick={() => handleSelectConversation(conversation)}
+                      isSelected={
+                        selectedConversation?.id === conversation.id
+                      }
+                      onClick={() =>
+                        handleSelectConversation(conversation)
+                      }
+                      onDelete={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(conversation.id);
+                      }}
                       formatTime={formatTime}
                     />
                   ))}
@@ -608,77 +713,87 @@ export default function HRMessagesPage() {
             </div>
           </div>
 
-          {/* ================================================================ */}
+          {/* ============================================================ */}
           {/* CHAT PANEL */}
-          {/* ================================================================ */}
-          <div className={`flex-1 flex flex-col bg-gradient-to-br from-gray-50/50 to-primary-50/20 dark:from-gray-900/50 dark:to-primary-950/20 ${
-            selectedConversation ? 'flex' : 'hidden md:flex'
-          }`}>
+          {/* ============================================================ */}
+          <div
+            className={`flex-1 flex flex-col rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white dark:bg-gray-900 overflow-hidden ${
+              selectedConversation ? "flex" : "hidden md:flex"
+            }`}
+          >
             {selectedConversation ? (
               <>
                 {/* Chat Header */}
-                <div className="p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <button
                       onClick={() => setSelectedConversation(null)}
-                      className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors flex-shrink-0"
                     >
-                      <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                      <ArrowLeft className="h-5 w-5" />
                     </button>
-
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-candidate-500 to-cyan-500 flex items-center justify-center shadow-md shadow-candidate-500/25">
-                      <User className="h-5 w-5 text-white" />
+                    <div className="w-10 h-10 rounded-full bg-primary-500/10 dark:bg-primary-500/15 border border-primary-500/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-primary-600 dark:text-primary-400">
+                        {(
+                          selectedConversation.candidate_user_name ||
+                          "U"
+                        )
+                          .charAt(0)
+                          .toUpperCase()}
+                      </span>
                     </div>
-
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {selectedConversation.candidate_user_name || 'Unknown Candidate'}
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+                        {selectedConversation.candidate_user_name ||
+                          "Unknown Candidate"}
                       </h3>
                       {selectedConversation.job_title && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                          <Briefcase className="h-3 w-3" />
-                          Applying for: {selectedConversation.job_title}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1">
+                          <Briefcase className="h-2.5 w-2.5 flex-shrink-0" />
+                          {selectedConversation.job_title}
                         </p>
                       )}
                     </div>
                   </div>
-
-                  {/* Header Actions */}
-                  <div className="flex items-center gap-1">
-                    <Link href={`/results`}>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Link href="/results">
                       <motion.button
+                        type="button"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        className="p-2.5 text-gray-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-xl transition-colors"
+                        className="p-2 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                        title="View Results"
                       >
-                        <FileText className="h-5 w-5" />
+                        <FileText className="h-4 w-4" />
                       </motion.button>
                     </Link>
                     <motion.button
+                      type="button"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="p-2.5 text-gray-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-xl transition-colors"
+                      onClick={() =>
+                        setDeleteConfirm(selectedConversation.id)
+                      }
+                      className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      title="Delete conversation"
                     >
-                      <Calendar className="h-5 w-5" />
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="p-2.5 text-gray-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-xl transition-colors"
-                    >
-                      <MoreVertical className="h-5 w-5" />
+                      <Trash2 className="h-4 w-4" />
                     </motion.button>
                   </div>
                 </div>
 
                 {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3 bg-gray-50/40 dark:bg-gray-950/20">
                   <AnimatePresence>
                     {currentConversationMessages.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                        <MessageSquare className="h-10 w-10 mb-3 opacity-30" />
-                        <p className="text-sm">No messages yet</p>
-                        <p className="text-xs mt-1">Send a message to start the conversation</p>
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <MessageSquare className="h-8 w-8 text-gray-300 dark:text-gray-600 mb-2" />
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          No messages yet
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                          Send a message to start the conversation
+                        </p>
                       </div>
                     ) : (
                       currentConversationMessages.map((message) => (
@@ -694,6 +809,43 @@ export default function HRMessagesPage() {
                   <div ref={messagesEndRef} />
                 </div>
 
+                {/* Send Error Banner */}
+                <AnimatePresence>
+                  {sendError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="mx-3 mb-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl flex items-start gap-3"
+                    >
+                      <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-red-700 dark:text-red-300">
+                          {sendError}
+                        </p>
+                        {selectedConversation?.candidate_email && (
+                          <a
+                            href={`mailto:${selectedConversation.candidate_email}`}
+                            className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            Email{" "}
+                            {selectedConversation.candidate_user_name ||
+                              "candidate"}{" "}
+                            instead
+                          </a>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setSendError(null)}
+                        className="p-1 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Message Composer */}
                 <MessageComposer
                   value={newMessage}
@@ -703,11 +855,74 @@ export default function HRMessagesPage() {
                 />
               </>
             ) : (
-              <EmptyState type="no-conversation" />
+              <EmptyState />
             )}
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 border border-gray-200/60 dark:border-gray-700/60"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Delete Chat
+                </h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                This will delete the conversation only for you. The other
+                person will still be able to see it. A new message from
+                either side will restore the conversation.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteConversation(deleteConfirm)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors shadow-lg shadow-red-500/25"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+export default function HRMessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-10 h-10 border-3 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <HRMessagesContent />
+    </Suspense>
   );
 }

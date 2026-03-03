@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, X } from 'lucide-react';
 import { getCandidateApplications } from '@/lib/api';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import {
   FilterTabs,
   ApplicationListCard,
@@ -40,6 +41,15 @@ export default function CandidateApplicationsPage() {
   useEffect(() => {
     fetchApplications();
   }, [fetchApplications]);
+
+  // Re-fetch applications when status changes come in via WebSocket
+  useRealtimeUpdates({
+    onEvent: (event) => {
+      if (event.type === 'application_status_changed') {
+        fetchApplications();
+      }
+    },
+  });
 
   const statusCounts = applications.reduce((acc, app) => {
     acc[app.status] = (acc[app.status] || 0) + 1;

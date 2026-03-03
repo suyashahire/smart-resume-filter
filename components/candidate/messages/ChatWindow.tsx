@@ -5,21 +5,16 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
-  User,
   Briefcase,
-  Phone,
-  Video,
   MessageSquare,
   Sparkles,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import MessageComposer from './MessageComposer';
 import TypingIndicator from './TypingIndicator';
 import type { ChatConversation, ChatMessage } from '@/store/useStore';
-
-const PANEL_CLASS =
-  'rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-sm flex flex-col min-h-0 overflow-hidden';
 
 function getDisplayName(c: ChatConversation): string {
   return c.other_user?.name ?? (c as any).hr_user_name ?? 'Recruiter';
@@ -37,6 +32,7 @@ interface ChatWindowProps {
   formatTime: (date: string) => string;
   composerDisabled?: boolean;
   showTypingIndicator?: boolean;
+  onDeleteConversation?: () => void;
 }
 
 export default function ChatWindow({
@@ -51,6 +47,7 @@ export default function ChatWindow({
   formatTime,
   composerDisabled = false,
   showTypingIndicator = false,
+  onDeleteConversation,
 }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -60,28 +57,27 @@ export default function ChatWindow({
 
   if (!conversation) {
     return (
-      <div className={`flex-1 flex flex-col ${PANEL_CLASS}`}>
+      <div className="flex-1 flex flex-col rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white dark:bg-gray-900 overflow-hidden">
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <div className="absolute inset-0 bg-gradient-to-b from-candidate-500/5 via-transparent to-purple-500/5 pointer-events-none rounded-xl" />
-          <div className="relative w-20 h-20 rounded-2xl bg-candidate-500/10 dark:bg-candidate-500/20 border border-candidate-500/20 dark:border-candidate-500/30 flex items-center justify-center mb-6">
-            <MessageSquare className="h-10 w-10 text-candidate-500 dark:text-candidate-400" />
+          <div className="w-16 h-16 rounded-2xl bg-candidate-500/10 dark:bg-candidate-500/15 border border-candidate-500/20 flex items-center justify-center mb-5">
+            <MessageSquare className="h-8 w-8 text-candidate-500/60" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No messages yet</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-6 leading-relaxed">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No conversation selected</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-6 leading-relaxed">
             Select a conversation to view messages, or apply to jobs to connect with recruiters.
           </p>
           <Link href="/candidate/jobs">
             <motion.span
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-candidate-500 hover:bg-candidate-600 dark:bg-candidate-600 dark:hover:bg-candidate-500 text-white shadow-sm shadow-candidate-500/20 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-candidate-500 hover:bg-candidate-600 text-white shadow-sm shadow-candidate-500/20 transition-colors"
             >
-              Apply to get noticed
+              Browse Jobs
               <ArrowRight className="h-4 w-4" />
             </motion.span>
           </Link>
-          <Link href="/candidate/jobs" className="mt-3 inline-flex items-center gap-2 text-sm text-candidate-600 dark:text-candidate-400 hover:underline">
-            <Sparkles className="h-4 w-4" /> Browse jobs
+          <Link href="/candidate/jobs" className="mt-3 inline-flex items-center gap-1.5 text-xs text-candidate-600 dark:text-candidate-400 hover:underline">
+            <Sparkles className="h-3.5 w-3.5" /> Discover opportunities
           </Link>
         </div>
       </div>
@@ -94,55 +90,49 @@ export default function ChatWindow({
     : (conversation as any).company;
 
   return (
-    <div className={`flex-1 flex flex-col ${PANEL_CLASS}`}>
-      {/* Sticky chat header */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md flex items-center justify-between gap-3">
+    <div className="flex-1 flex flex-col rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white dark:bg-gray-900 overflow-hidden">
+      {/* Chat Header */}
+      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={onBack}
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors flex-shrink-0"
-            aria-label="Back to conversations"
+            className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors flex-shrink-0"
+            aria-label="Back"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="w-11 h-11 rounded-xl bg-candidate-500/15 dark:bg-candidate-500/20 border border-candidate-500/30 flex items-center justify-center flex-shrink-0">
-            <User className="h-5 w-5 text-candidate-600 dark:text-candidate-400" />
+          <div className="w-10 h-10 rounded-full bg-candidate-500/10 dark:bg-candidate-500/15 border border-candidate-500/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-sm font-bold text-candidate-600 dark:text-candidate-400">
+              {displayName.charAt(0).toUpperCase()}
+            </span>
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</h3>
+            <h3 className="font-semibold text-sm text-gray-900 dark:text-white truncate">{displayName}</h3>
             {jobOrCompany && (
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1">
-                <Briefcase className="h-3 w-3 flex-shrink-0" />
+                <Briefcase className="h-2.5 w-2.5 flex-shrink-0" />
                 {jobOrCompany}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {onDeleteConversation && (
           <motion.button
             type="button"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2.5 rounded-xl text-gray-500 hover:text-candidate-500 hover:bg-candidate-500/10 dark:hover:bg-candidate-500/20 transition-colors"
-            aria-label="Call"
+            onClick={onDeleteConversation}
+            className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0"
+            title="Delete conversation"
           >
-            <Phone className="h-5 w-5" />
+            <Trash2 className="h-4 w-4" />
           </motion.button>
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-2.5 rounded-xl text-gray-500 hover:text-candidate-500 hover:bg-candidate-500/10 dark:hover:bg-candidate-500/20 transition-colors"
-            aria-label="Video"
-          >
-            <Video className="h-5 w-5" />
-          </motion.button>
-        </div>
+        )}
       </div>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3 bg-gray-50/40 dark:bg-gray-950/20">
         <AnimatePresence mode="popLayout">
           {messages.length === 0 && !showTypingIndicator ? (
             <motion.div
@@ -152,11 +142,9 @@ export default function ChatWindow({
               exit={{ opacity: 0 }}
               className="flex flex-col items-center justify-center py-12 text-center"
             >
-              <MessageSquare className="h-10 w-10 text-gray-400 dark:text-gray-500 mb-3" />
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">No messages yet</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Send a message to start the conversation
-              </p>
+              <MessageSquare className="h-8 w-8 text-gray-300 dark:text-gray-600 mb-2" />
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No messages yet</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Send a message to start the conversation</p>
             </motion.div>
           ) : (
             <>

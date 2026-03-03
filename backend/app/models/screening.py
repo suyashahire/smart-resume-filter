@@ -34,6 +34,7 @@ class ScreeningResult(Document):
     user_id: str = Field(...)  # Reference to User who performed screening
     job_id: str = Field(...)  # Reference to JobDescription
     resume_id: str = Field(...)  # Reference to Resume
+    application_id: Optional[str] = None  # Reference to Application (for candidate portal applicants)
     
     # Overall score
     overall_score: float = Field(default=0.0)  # 0-100

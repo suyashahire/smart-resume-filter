@@ -6,6 +6,13 @@ from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from enum import Enum
+
+
+class ApplicationMode(str, Enum):
+    """Controls how candidate portal applications are handled."""
+    AUTO_INCLUDE = "auto_include"       # Automatically screen and include in results
+    REQUIRE_APPROVAL = "require_approval"  # Require HR approval before screening
 
 
 class JobDescription(Document):
@@ -30,6 +37,9 @@ class JobDescription(Document):
     status: str = "open"  # open, closed, draft
     is_active: bool = Field(default=True)
     candidates_screened: int = Field(default=0)
+    
+    # Application mode for candidate portal
+    application_mode: ApplicationMode = Field(default=ApplicationMode.REQUIRE_APPROVAL)
     
     # Company info (for candidate display)
     company: Optional[str] = None
@@ -70,6 +80,7 @@ class JobDescriptionCreate(BaseModel):
     location: Optional[str] = None
     salary_range: Optional[str] = None
     job_type: str = "full-time"
+    application_mode: ApplicationMode = ApplicationMode.REQUIRE_APPROVAL
 
 
 class JobDescriptionResponse(BaseModel):
@@ -87,6 +98,7 @@ class JobDescriptionResponse(BaseModel):
     is_active: bool
     candidates_screened: int
     company: Optional[str] = None
+    application_mode: ApplicationMode = ApplicationMode.REQUIRE_APPROVAL
     created_at: datetime
     
     class Config:
@@ -105,6 +117,7 @@ class JobDescriptionUpdate(BaseModel):
     salary_range: Optional[str] = None
     job_type: Optional[str] = None
     is_active: Optional[bool] = None
+    application_mode: Optional[ApplicationMode] = None
 
 
 class ScreeningRequest(BaseModel):

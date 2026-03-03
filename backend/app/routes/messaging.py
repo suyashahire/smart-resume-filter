@@ -15,6 +15,7 @@ from app.models.message import (
     UserSummary
 )
 from app.routes.auth import get_current_user
+from app.services.websocket_manager import get_connection_manager, EventType
 
 router = APIRouter()
 
@@ -28,11 +29,12 @@ def get_other_user_id(conversation: DirectConversation, current_user: User) -> s
     return conversation.hr_user_id
 
 
-def get_unread_count(conversation: DirectConversation, current_user: User) -> int:
-    """Get unread count for the current user."""
-    if current_user.role == UserRole.CANDIDATE:
-        return conversation.unread_count_candidate
-    return conversation.unread_count_hr
+def _get_unread_count_for_user(conversation: DirectConversation, current_user: User) -> int:
+    """Get unread count for the current user based on their position in the conversation."""
+    user_id = str(current_user.id)
+    if user_id == conversation.hr_user_id:
+        return conversation.unread_count_hr
+    return conversation.unread_count_candidate
 
 
 # ==================== Conversations ====================
@@ -46,12 +48,12 @@ async def get_conversations(
     
     Works for both HR and Candidates.
     """
-    # Build query based on user role
-    if current_user.role == UserRole.CANDIDATE:
-        query = {"candidate_user_id": str(current_user.id)}
-    else:
-        # HR or Admin
-        query = {"hr_user_id": str(current_user.id)}
+    # Find all conversations where this user is a participant (either side) and not deleted
+    user_id = str(current_user.id)
+    query = {
+        "$or": [{"hr_user_id": user_id}, {"candidate_user_id": user_id}],
+        "deleted_for_users": {"$ne": user_id}
+    }
     
     conversations = await DirectConversation.find(query).sort("-last_message_at").to_list()
     
@@ -82,7 +84,7 @@ async def get_conversations(
             job_title=job_title,
             last_message_at=conv.last_message_at,
             last_message_preview=conv.last_message_preview,
-            unread_count=get_unread_count(conv, current_user),
+            unread_count=_get_unread_count_for_user(conv, current_user),
             created_at=conv.created_at,
         ))
     
@@ -167,28 +169,14 @@ async def send_message(
             detail="Receiver not found"
         )
     
-    # Validate sender-receiver roles
     sender_id = str(current_user.id)
     receiver_id = message_data.receiver_id
     
-    # Determine HR and candidate IDs
-    if current_user.role == UserRole.CANDIDATE:
-        if receiver.role not in [UserRole.HR_MANAGER, UserRole.ADMIN]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Candidates can only message HR staff"
-            )
-        hr_user_id = receiver_id
-        candidate_user_id = sender_id
-    else:
-        # HR/Admin sending to candidate
-        if receiver.role != UserRole.CANDIDATE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="HR can only message candidates through this system"
-            )
-        hr_user_id = sender_id
-        candidate_user_id = receiver_id
+    # Assign participant slots consistently using sorted IDs
+    # This ensures the same pair always maps to the same conversation
+    sorted_ids = sorted([sender_id, receiver_id])
+    hr_user_id = sorted_ids[0]
+    candidate_user_id = sorted_ids[1]
     
     # Find or create conversation
     conversation = await DirectConversation.find_one({
@@ -219,13 +207,37 @@ async def send_message(
     conversation.last_message_at = message.sent_at
     conversation.last_message_preview = message.content[:100]
     
-    # Update unread count for receiver
-    if current_user.role == UserRole.CANDIDATE:
+    # Update unread count for receiver based on their position in the conversation
+    if receiver_id == conversation.hr_user_id:
         conversation.unread_count_hr += 1
     else:
         conversation.unread_count_candidate += 1
     
+    # Un-delete for both users when a new message is sent
+    if conversation.deleted_for_users:
+        conversation.deleted_for_users = []
+    
     await conversation.save()
+    
+    # Broadcast real-time message event to receiver
+    try:
+        ws_manager = get_connection_manager()
+        await ws_manager.broadcast_event(
+            EventType.NEW_MESSAGE,
+            {
+                "message_id": str(message.id),
+                "conversation_id": message.conversation_id,
+                "sender_id": message.sender_id,
+                "sender_name": current_user.name,
+                "receiver_id": message.receiver_id,
+                "content": message.content[:100],
+                "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+            },
+            user_id=receiver_id
+        )
+    except Exception as e:
+        # Don't fail the send if broadcast fails
+        print(f"WebSocket broadcast failed: {e}")
     
     return MessageResponse(
         id=str(message.id),
@@ -272,11 +284,12 @@ async def mark_as_read(
         "read_at": None
     }).update_many({"$set": {"read_at": datetime.utcnow()}})
     
-    # Reset unread count
-    if current_user.role == UserRole.CANDIDATE:
-        conversation.unread_count_candidate = 0
-    else:
+    # Reset unread count based on user's position in the conversation
+    user_id_str = str(current_user.id)
+    if user_id_str == conversation.hr_user_id:
         conversation.unread_count_hr = 0
+    else:
+        conversation.unread_count_candidate = 0
     
     await conversation.save()
     
@@ -292,16 +305,61 @@ async def get_unread_count(
     """
     Get total unread message count for the current user.
     """
-    # Build query based on user role
-    if current_user.role == UserRole.CANDIDATE:
-        conversations = await DirectConversation.find(
-            {"candidate_user_id": str(current_user.id)}
-        ).to_list()
-        total = sum(c.unread_count_candidate for c in conversations)
-    else:
-        conversations = await DirectConversation.find(
-            {"hr_user_id": str(current_user.id)}
-        ).to_list()
-        total = sum(c.unread_count_hr for c in conversations)
+    # Find all conversations where this user is a participant (not deleted)
+    user_id = str(current_user.id)
+    conversations = await DirectConversation.find(
+        {
+            "$or": [{"hr_user_id": user_id}, {"candidate_user_id": user_id}],
+            "deleted_for_users": {"$ne": user_id}
+        }
+    ).to_list()
+    total = sum(
+        c.unread_count_hr if c.hr_user_id == user_id else c.unread_count_candidate
+        for c in conversations
+    )
     
     return {"unread_count": total}
+
+
+# ==================== Delete Conversation ====================
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Soft-delete a conversation for the current user only.
+    
+    The conversation remains visible to the other participant.
+    If a new message is sent later, the conversation reappears for both users.
+    """
+    conversation = await DirectConversation.get(conversation_id)
+    
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    # Check access
+    user_id = str(current_user.id)
+    if user_id != conversation.hr_user_id and user_id != conversation.candidate_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this conversation"
+        )
+    
+    # Add user to deleted list if not already there
+    if user_id not in conversation.deleted_for_users:
+        conversation.deleted_for_users.append(user_id)
+    
+    # Reset unread count for the deleting user
+    if user_id == conversation.hr_user_id:
+        conversation.unread_count_hr = 0
+    else:
+        conversation.unread_count_candidate = 0
+    
+    await conversation.save()
+    
+    return {"message": "Conversation deleted"}

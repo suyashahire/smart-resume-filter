@@ -13,6 +13,8 @@ try:
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
+    genai = None
+    types = None
 
 from app.config import settings
 from app.services.rag import get_rag_service
@@ -346,8 +348,10 @@ class ChatbotService:
             return CANDIDATE_SYSTEM_PROMPT
         return HR_SYSTEM_PROMPT
     
-    def _build_chat_history(self, messages: List[Dict[str, Any]]) -> List[types.Content]:
+    def _build_chat_history(self, messages: List[Dict[str, Any]]) -> List[Any]:
         """Convert stored messages to Gemini chat history format."""
+        if not HAS_GEMINI or types is None:
+            return []
         history = []
         for msg in messages:
             role = msg.get("role", "user")

@@ -4,6 +4,7 @@ Notification routes for the HR dashboard.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Optional
+from bson import ObjectId
 from app.models.notification import (
     Notification,
     NotificationResponse,
@@ -87,12 +88,27 @@ async def mark_all_read(
     return {"status": "ok"}
 
 
+@router.delete("/all")
+async def delete_all_notifications(
+    current_user: User = Depends(get_current_user),
+):
+    """Delete all notifications for the current user."""
+    await Notification.find({
+        "recipient_id": str(current_user.id),
+    }).delete()
+    return {"status": "ok"}
+
+
 @router.delete("/{notification_id}")
 async def delete_notification(
     notification_id: str,
     current_user: User = Depends(get_current_user),
 ):
     """Delete a notification."""
+    # Validate that the ID is a valid MongoDB ObjectId
+    if not ObjectId.is_valid(notification_id):
+        # Client-side-only notification (e.g. from WebSocket), not in DB
+        return {"status": "ok"}
     n = await Notification.get(notification_id)
     if not n or n.recipient_id != str(current_user.id):
         raise HTTPException(status_code=404, detail="Notification not found")

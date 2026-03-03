@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar, UserPlus } from 'lucide-react';
+import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar, UserPlus, Check, XCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import CalendarModal from '@/components/Calendar/CalendarModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,11 +58,13 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const { user, isAuthenticated, logout, useRealApi } = useStore();
+  const [processingApproval, setProcessingApproval] = useState<string | null>(null);
+  const { user, isAuthenticated, logout, useRealApi, bumpResultsVersion } = useStore();
 
   // Realtime notifications
   const [authToken, setAuthToken] = useState<string | undefined>(undefined);
-  const { notifications, addNotification, dismissNotification, clearNotifications } = useRealtimeNotifications();
+  const { notifications, addNotification, dismissNotification, clearNotifications, setNotifications } = useRealtimeNotifications();
+  const [dbNotificationsLoaded, setDbNotificationsLoaded] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -71,11 +73,90 @@ export default function Navbar() {
     }
   }, []);
 
+  // Load persisted notifications from database on mount
+  useEffect(() => {
+    if (!isAuthenticated || dbNotificationsLoaded) return;
+    const loadDbNotifications = async () => {
+      try {
+        const response = await api.getNotifications();
+        if (response.notifications && response.notifications.length > 0) {
+          const mapped = response.notifications
+            .filter((n: api.NotificationItem) => !n.is_read)
+            .map((n: api.NotificationItem) => ({
+              id: n.id,
+              type: (n.type === 'application_approval_required' ? 'new_application' : n.type) as RealtimeEventType,
+              message: n.message,
+              timestamp: new Date(n.created_at),
+              data: {
+                requires_approval: n.type === 'application_approval_required',
+                application_id: n.application_id,
+                candidate_name: n.candidate_name,
+                job_title: n.job_title,
+                job_id: n.job_id,
+                notification_db_id: n.id,
+              },
+            }));
+          if (mapped.length > 0) {
+            setNotifications(mapped);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      }
+      setDbNotificationsLoaded(true);
+    };
+    loadDbNotifications();
+  }, [isAuthenticated, dbNotificationsLoaded, setNotifications]);
+
+  // Handle application approval
+  const handleApproveApplication = async (applicationId: string, notificationId: string, dbId?: string) => {
+    try {
+      setProcessingApproval(applicationId);
+      const result = await api.approveApplication(applicationId);
+      dismissNotification(notificationId);
+      // Delete notification from DB using the actual DB ID
+      const idToDelete = dbId || notificationId;
+      try { await api.deleteNotification(idToDelete); } catch {}
+      // Trigger results page refresh
+      bumpResultsVersion();
+      console.log('Application approved:', result);
+    } catch (error) {
+      console.error('Failed to approve application:', error);
+      alert(error instanceof Error ? error.message : 'Failed to approve application');
+    } finally {
+      setProcessingApproval(null);
+    }
+  };
+
+  // Handle application rejection
+  const handleRejectApplication = async (applicationId: string, notificationId: string, dbId?: string) => {
+    try {
+      setProcessingApproval(applicationId);
+      const result = await api.rejectApplication(applicationId);
+      dismissNotification(notificationId);
+      // Delete notification from DB using the actual DB ID
+      const idToDelete = dbId || notificationId;
+      try { await api.deleteNotification(idToDelete); } catch {}
+      // Trigger results page refresh
+      bumpResultsVersion();
+      console.log('Application rejected:', result);
+    } catch (error) {
+      console.error('Failed to reject application:', error);
+      alert(error instanceof Error ? error.message : 'Failed to reject application');
+    } finally {
+      setProcessingApproval(null);
+    }
+  };
+
   const handleEvent = useCallback((event: RealtimeEvent) => {
     if (event.type !== 'connection_established') {
       addNotification(event);
+      // Auto-refresh results page when a candidate is scored (auto-include or manual approval)
+      if (event.type === 'candidate_scored') {
+        bumpResultsVersion();
+      }
     }
-  }, [addNotification]);
+  }, [addNotification, bumpResultsVersion]);
 
   const { isConnected } = useRealtimeUpdates({
     onEvent: handleEvent,
@@ -248,7 +329,11 @@ export default function Navbar() {
                           <div className="flex items-center gap-2">
                             {notifications.length > 0 && (
                               <button
-                                onClick={clearNotifications}
+                                onClick={async () => {
+                                  // Delete all from DB, then clear local state
+                                  try { await api.deleteAllNotifications(); } catch (e) { console.error('Failed to delete all notifications:', e); }
+                                  clearNotifications();
+                                }}
                                 className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                               >
                                 Clear
@@ -275,34 +360,72 @@ export default function Navbar() {
                             </div>
                           ) : (
                             <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                              {notifications.map((notification) => (
-                                <motion.div
-                                  key={notification.id}
-                                  initial={{ opacity: 0, x: -10 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className={`p-1.5 rounded-lg ${eventColors[notification.type]} text-white`}>
-                                      {eventIcons[notification.type]}
+                              {notifications.map((notification) => {
+                                const requiresApproval = notification.type === 'new_application' && 
+                                  notification.data?.requires_approval === true;
+                                const applicationId = notification.data?.application_id as string | undefined;
+                                const isProcessing = processingApproval === applicationId;
+                                
+                                return (
+                                  <motion.div
+                                    key={notification.id}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className={`p-1.5 rounded-lg ${eventColors[notification.type]} text-white`}>
+                                        {eventIcons[notification.type]}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-gray-900 dark:text-white">
+                                          {notification.message}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                          {formatTimestamp(notification.timestamp)}
+                                        </p>
+                                        
+                                        {/* Approval Buttons */}
+                                        {requiresApproval && applicationId && (
+                                          <div className="flex items-center gap-2 mt-2">
+                                            <button
+                                              onClick={() => handleApproveApplication(applicationId, notification.id, notification.data?.notification_db_id as string | undefined)}
+                                              disabled={isProcessing}
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors disabled:opacity-50"
+                                            >
+                                              {isProcessing ? (
+                                                <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                              ) : (
+                                                <Check className="h-3 w-3" />
+                                              )}
+                                              Approve
+                                            </button>
+                                            <button
+                                              onClick={() => handleRejectApplication(applicationId, notification.id, notification.data?.notification_db_id as string | undefined)}
+                                              disabled={isProcessing}
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50"
+                                            >
+                                              <XCircle className="h-3 w-3" />
+                                              Reject
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <button
+                                        onClick={async () => {
+                                          // Delete from DB then dismiss from UI
+                                          const dbId = (notification.data?.notification_db_id as string) || notification.id;
+                                          try { await api.deleteNotification(dbId); } catch (e) { console.error('Failed to delete notification:', e); }
+                                          dismissNotification(notification.id);
+                                        }}
+                                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                                      >
+                                        <X className="h-3 w-3 text-gray-400" />
+                                      </button>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm text-gray-900 dark:text-white">
-                                        {notification.message}
-                                      </p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                        {formatTimestamp(notification.timestamp)}
-                                      </p>
-                                    </div>
-                                    <button
-                                      onClick={() => dismissNotification(notification.id)}
-                                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                                    >
-                                      <X className="h-3 w-3 text-gray-400" />
-                                    </button>
-                                  </div>
-                                </motion.div>
-                              ))}
+                                  </motion.div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>

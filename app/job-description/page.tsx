@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Sparkles, Cloud, HardDrive, Zap, ArrowRight, ArrowLeft, FileText, Target, Brain, CheckCircle } from 'lucide-react';
+import { Briefcase, Sparkles, Cloud, HardDrive, Zap, ArrowRight, ArrowLeft, FileText, Target, Brain, CheckCircle, Users, ShieldCheck, UserCheck } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { useStore, Job } from '@/store/useStore';
 import { parseJobDescription, screenCandidates } from '@/lib/mockApi';
@@ -26,6 +26,7 @@ export default function JobDescriptionPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [experience, setExperience] = useState('');
+  const [applicationMode, setApplicationMode] = useState<'auto_include' | 'require_approval'>('require_approval');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>('');
   const [extractedSkills, setExtractedSkills] = useState<string[]>([]);
@@ -55,6 +56,7 @@ export default function JobDescriptionPage() {
           title,
           description,
           experience_required: experience,
+          application_mode: applicationMode,
         });
 
         requiredSkills = jobResponse.required_skills;
@@ -367,6 +369,113 @@ Requirements:
                 className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
                 required
               />
+            </div>
+
+            {/* Application Mode Toggle */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                Candidate Portal Applications
+              </label>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Choose how to handle applications from candidates who apply through the candidate portal.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Auto-include Option */}
+                <motion.button
+                  type="button"
+                  onClick={() => setApplicationMode('auto_include')}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className={`relative p-4 rounded-xl border-2 transition-all text-left ${
+                    applicationMode === 'auto_include'
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                      : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      applicationMode === 'auto_include'
+                        ? 'bg-purple-100 dark:bg-purple-800/50'
+                        : 'bg-gray-100 dark:bg-gray-700'
+                    }`}>
+                      <Zap className={`h-5 w-5 ${
+                        applicationMode === 'auto_include'
+                          ? 'text-purple-600 dark:text-purple-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <p className={`font-semibold ${
+                        applicationMode === 'auto_include'
+                          ? 'text-purple-800 dark:text-purple-300'
+                          : 'text-gray-800 dark:text-gray-300'
+                      }`}>
+                        Auto-Include
+                      </p>
+                      <p className={`text-sm mt-1 ${
+                        applicationMode === 'auto_include'
+                          ? 'text-purple-600 dark:text-purple-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
+                        Automatically screen candidates and include them in results
+                      </p>
+                    </div>
+                  </div>
+                  {applicationMode === 'auto_include' && (
+                    <div className="absolute top-3 right-3">
+                      <CheckCircle className="h-5 w-5 text-purple-500" />
+                    </div>
+                  )}
+                </motion.button>
+
+                {/* Require Approval Option */}
+                <motion.button
+                  type="button"
+                  onClick={() => setApplicationMode('require_approval')}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className={`relative p-4 rounded-xl border-2 transition-all text-left ${
+                    applicationMode === 'require_approval'
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                      : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      applicationMode === 'require_approval'
+                        ? 'bg-purple-100 dark:bg-purple-800/50'
+                        : 'bg-gray-100 dark:bg-gray-700'
+                    }`}>
+                      <ShieldCheck className={`h-5 w-5 ${
+                        applicationMode === 'require_approval'
+                          ? 'text-purple-600 dark:text-purple-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <p className={`font-semibold ${
+                        applicationMode === 'require_approval'
+                          ? 'text-purple-800 dark:text-purple-300'
+                          : 'text-gray-800 dark:text-gray-300'
+                      }`}>
+                        Require Approval
+                      </p>
+                      <p className={`text-sm mt-1 ${
+                        applicationMode === 'require_approval'
+                          ? 'text-purple-600 dark:text-purple-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
+                        Review each application before including in screening
+                      </p>
+                    </div>
+                  </div>
+                  {applicationMode === 'require_approval' && (
+                    <div className="absolute top-3 right-3">
+                      <CheckCircle className="h-5 w-5 text-purple-500" />
+                    </div>
+                  )}
+                </motion.button>
+              </div>
             </div>
 
             {/* Processing Status */}

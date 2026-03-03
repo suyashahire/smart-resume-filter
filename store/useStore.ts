@@ -209,6 +209,10 @@ interface StoreState {
   hasFetchedSessionData: boolean;
   setHasFetchedSessionData: (fetched: boolean) => void;
 
+  // Results refresh trigger (bumped after approval/rejection to force re-fetch)
+  resultsVersion: number;
+  bumpResultsVersion: () => void;
+
   // Candidate Portal state
   candidateApplications: CandidateApplication[];
   setCandidateApplications: (apps: CandidateApplication[]) => void;
@@ -269,6 +273,7 @@ export const useStore = create<StoreState>()(
       activities: [],
       isHydrated: false,
       hasFetchedSessionData: false,
+      resultsVersion: 0,
       candidateApplications: [],
       conversations: [],
       currentConversationMessages: [],
@@ -481,6 +486,9 @@ export const useStore = create<StoreState>()(
 
       // Session-level data fetch tracking
       setHasFetchedSessionData: (fetched) => set({ hasFetchedSessionData: fetched }),
+
+      // Results refresh trigger
+      bumpResultsVersion: () => set((state) => ({ resultsVersion: state.resultsVersion + 1 })),
 
       // Candidate Portal actions
       setCandidateApplications: (apps) => set({ candidateApplications: apps }),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Users, FileText, MessageSquare, TrendingUp, Award, Calendar, Cloud, HardDrive, RefreshCw, BarChart3, Sparkles, ArrowRight, Crown, Briefcase, Clock, Timer, CheckCircle2 } from 'lucide-react';
@@ -10,13 +10,18 @@ import * as api from '@/lib/api';
 import RealtimeIndicator from '@/components/features/RealtimeIndicator';
 
 export default function DashboardPage() {
-  const { resumes, filteredResumes, interviews, jobDescription, useRealApi, isAuthenticated, setResumes, setFilteredResumes, jobs, candidateJobAssignments, hasFetchedSessionData, setHasFetchedSessionData } = useStore();
+  const { resumes, filteredResumes, interviews, useRealApi, isAuthenticated, setResumes, setFilteredResumes, jobs, candidateJobAssignments, assignCandidateToJob, hasFetchedSessionData, setHasFetchedSessionData } = useStore();
   const [apiStats, setApiStats] = useState<api.DashboardStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingResumes, setIsLoadingResumes] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Fetch screening results from all jobs (with proper scores)
+  const candidateJobAssignmentsRef = useRef(candidateJobAssignments);
+  candidateJobAssignmentsRef.current = candidateJobAssignments;
+  const assignCandidateToJobRef = useRef(assignCandidateToJob);
+  assignCandidateToJobRef.current = assignCandidateToJob;
+
   const fetchScreeningResultsFromApi = useCallback(async () => {
     setIsLoadingResumes(true);
     try {
@@ -78,6 +83,18 @@ export default function DashboardPage() {
         
         setResumes(mergedResumes);
         setFilteredResumes(screenedOnly);
+
+        // Auto-create candidateJobAssignments for screening results that don't have one
+        allScreenedResumes.forEach((r: any) => {
+          if (r.jobId) {
+            const existing = candidateJobAssignmentsRef.current.some(
+              a => a.candidateId === r.id && a.jobId === r.jobId
+            );
+            if (!existing) {
+              assignCandidateToJobRef.current(r.id, r.jobId, r.score || 0);
+            }
+          }
+        });
       } else {
         // No jobs found - still fetch raw resumes for total count
         const resumesData = await api.getResumes();
@@ -350,8 +367,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Current Position Banner */}
-          {jobDescription && (
+          {/* Active Jobs Banner */}
+          {jobs.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -363,8 +380,12 @@ export default function DashboardPage() {
                   <Sparkles className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm text-primary-600 dark:text-primary-400 font-medium">Current Position</p>
-                  <p className="font-semibold text-gray-900 dark:text-white">{jobDescription.title}</p>
+                  <p className="text-sm text-primary-600 dark:text-primary-400 font-medium">
+                    {jobs.length === 1 ? 'Current Position' : `${jobs.length} Active Positions`}
+                  </p>
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    {jobs.length === 1 ? jobs[0].title : jobs.map(j => j.title).join(', ')}
+                  </p>
                 </div>
               </div>
             </motion.div>

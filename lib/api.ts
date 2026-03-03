@@ -247,6 +247,8 @@ export async function downloadResume(id: string): Promise<Blob> {
 
 // ==================== Job Descriptions ====================
 
+export type ApplicationMode = 'auto_include' | 'require_approval';
+
 export interface JobDescriptionCreate {
   title: string;
   description: string;
@@ -255,6 +257,7 @@ export interface JobDescriptionCreate {
   location?: string;
   salary_range?: string;
   job_type?: string;
+  application_mode?: ApplicationMode;
 }
 
 export interface JobDescriptionResponse {
@@ -271,6 +274,7 @@ export interface JobDescriptionResponse {
   is_active: boolean;
   candidates_screened: number;
   company?: string;
+  application_mode: ApplicationMode;
   created_at: string;
 }
 
@@ -284,6 +288,9 @@ export interface ResumeWithScore {
   experience: string;
   score: number;
   skill_matches: string[];
+  source?: 'hr_upload' | 'candidate_portal';
+  application_id?: string;
+  candidate_user_id?: string;
 }
 
 export async function createJobDescription(data: JobDescriptionCreate): Promise<JobDescriptionResponse> {
@@ -310,6 +317,57 @@ export async function updateJobDescription(id: string, data: Partial<JobDescript
 
 export async function deleteJobDescription(id: string): Promise<void> {
   await apiRequest(`/jobs/${id}`, { method: 'DELETE' });
+}
+// ==================== Application Approval ====================
+
+export interface PendingApplication {
+  application_id: string;
+  candidate_id: string;
+  candidate_name: string;
+  resume_id?: string;
+  applied_at: string;
+  status: string;
+}
+
+export async function getPendingApplications(jobId: string): Promise<PendingApplication[]> {
+  return apiRequest(`/jobs/${jobId}/applications/pending`);
+}
+
+export async function approveApplication(applicationId: string): Promise<{
+  message: string;
+  application_id: string;
+  screening_result_id?: string;
+  score?: number;
+}> {
+  return apiRequest(`/jobs/applications/${applicationId}/approve`, {
+    method: 'PUT',
+  });
+}
+
+export async function rejectApplication(applicationId: string, reason?: string): Promise<{
+  message: string;
+  application_id: string;
+}> {
+  const params = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+  return apiRequest(`/jobs/applications/${applicationId}/reject${params}`, {
+    method: 'PUT',
+  });
+}
+
+export async function updateApplicationStatus(
+  applicationId: string,
+  status: string,
+  note?: string
+): Promise<{
+  message: string;
+  application_id: string;
+  new_status: string;
+  old_status: string;
+}> {
+  return apiRequest(`/jobs/applications/${applicationId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, note }),
+  });
 }
 
 export async function screenCandidates(jobId: string, resumeIds?: string[]): Promise<ResumeWithScore[]> {
@@ -850,6 +908,12 @@ export async function markMessagesAsRead(conversationId: string): Promise<{ mess
   });
 }
 
+export async function deleteConversation(conversationId: string): Promise<{ message: string }> {
+  return apiRequest(`/messages/conversations/${conversationId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getUnreadCount(): Promise<{ unread_count: number }> {
   return apiRequest('/messages/unread');
 }
@@ -988,4 +1052,8 @@ export async function markAllNotificationsRead(): Promise<void> {
 
 export async function deleteNotification(notificationId: string): Promise<void> {
   return apiRequest(`/notifications/${notificationId}`, { method: 'DELETE' });
+}
+
+export async function deleteAllNotifications(): Promise<void> {
+  return apiRequest('/notifications/all', { method: 'DELETE' });
 }

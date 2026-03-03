@@ -137,6 +137,9 @@ class ResumeWithScore(BaseModel):
     experience: str
     score: float
     skill_matches: List[str] = []
+    source: str = "hr_upload"  # "hr_upload" or "candidate_portal"
+    application_id: Optional[str] = None
+    candidate_user_id: Optional[str] = None  # User ID if candidate has a portal account
     
     class Config:
         from_attributes = True

@@ -12,6 +12,10 @@ from enum import Enum
 class NotificationType(str, Enum):
     """Types of notifications."""
     NEW_APPLICATION = "new_application"
+    APPLICATION_APPROVAL_REQUIRED = "application_approval_required"  # Needs HR approval
+    APPLICATION_APPROVED = "application_approved"  # Candidate was approved
+    APPLICATION_REJECTED = "application_rejected"  # Candidate was rejected
+    APPLICATION_HIRED = "application_hired"  # Candidate was hired
     RESUME_SCREENED = "resume_screened"
     INTERVIEW_COMPLETED = "interview_completed"
     GENERAL = "general"

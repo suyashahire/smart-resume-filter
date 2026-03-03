@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Briefcase, Plus, Edit3, Trash2, Users, CheckCircle, Clock, Archive, Search, X, ChevronRight, Sparkles, Target, Calendar, MoreVertical, Play, Pause, Settings, Eye, FileText, Filter, BarChart3, Loader2 } from 'lucide-react';
+import { Briefcase, Plus, Edit3, Trash2, Users, CheckCircle, Clock, Archive, Search, X, ChevronRight, Sparkles, Target, Calendar, MoreVertical, Play, Pause, Settings, Eye, FileText, Filter, BarChart3, Loader2, Zap, ShieldCheck } from 'lucide-react';
 import { useStore, Job } from '@/store/useStore';
 import { deleteJobDescription, getJobDescriptions, createJobDescription } from '@/lib/api';
 
@@ -71,6 +71,7 @@ export default function JobsPage() {
     requiredSkills: '',
     experience: ''
   });
+  const [applicationMode, setApplicationMode] = useState<'auto_include' | 'require_approval'>('require_approval');
 
   // Filter jobs
   const displayedJobs = useMemo(() => {
@@ -103,6 +104,7 @@ export default function JobsPage() {
 
   const resetForm = () => {
     setFormData({ title: '', description: '', requiredSkills: '', experience: '' });
+    setApplicationMode('require_approval');
     setEditingJob(null);
   };
 
@@ -145,6 +147,7 @@ export default function JobsPage() {
             title: formData.title,
             description: formData.description,
             experience_required: formData.experience,
+            application_mode: applicationMode,
           });
 
           const newJob: Job = {
@@ -635,6 +638,103 @@ export default function JobsPage() {
                     className="w-full px-4 py-3 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200/50 dark:border-gray-700/50 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                   />
                 </div>
+
+                {/* Application Mode Toggle */}
+                {!editingJob && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Candidate Portal Applications
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      How should applications from the candidate portal be handled?
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Auto-include */}
+                      <button
+                        type="button"
+                        onClick={() => setApplicationMode('auto_include')}
+                        className={`relative p-3 rounded-xl border-2 transition-all text-left ${
+                          applicationMode === 'auto_include'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/80 hover:border-gray-300 dark:hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            applicationMode === 'auto_include'
+                              ? 'bg-blue-100 dark:bg-blue-800/50'
+                              : 'bg-gray-100 dark:bg-gray-700'
+                          }`}>
+                            <Zap className={`h-4 w-4 ${
+                              applicationMode === 'auto_include'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold ${
+                              applicationMode === 'auto_include'
+                                ? 'text-blue-800 dark:text-blue-300'
+                                : 'text-gray-800 dark:text-gray-300'
+                            }`}>Auto-Include</p>
+                            <p className={`text-xs mt-0.5 ${
+                              applicationMode === 'auto_include'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}>Auto-screen &amp; add to results</p>
+                          </div>
+                        </div>
+                        {applicationMode === 'auto_include' && (
+                          <div className="absolute top-2 right-2">
+                            <CheckCircle className="h-4 w-4 text-blue-500" />
+                          </div>
+                        )}
+                      </button>
+
+                      {/* Require Approval */}
+                      <button
+                        type="button"
+                        onClick={() => setApplicationMode('require_approval')}
+                        className={`relative p-3 rounded-xl border-2 transition-all text-left ${
+                          applicationMode === 'require_approval'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/80 hover:border-gray-300 dark:hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            applicationMode === 'require_approval'
+                              ? 'bg-blue-100 dark:bg-blue-800/50'
+                              : 'bg-gray-100 dark:bg-gray-700'
+                          }`}>
+                            <ShieldCheck className={`h-4 w-4 ${
+                              applicationMode === 'require_approval'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold ${
+                              applicationMode === 'require_approval'
+                                ? 'text-blue-800 dark:text-blue-300'
+                                : 'text-gray-800 dark:text-gray-300'
+                            }`}>Require Approval</p>
+                            <p className={`text-xs mt-0.5 ${
+                              applicationMode === 'require_approval'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}>Review before screening</p>
+                          </div>
+                        </div>
+                        {applicationMode === 'require_approval' && (
+                          <div className="absolute top-2 right-2">
+                            <CheckCircle className="h-4 w-4 text-blue-500" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-3 pt-4">
                   <button

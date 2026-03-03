@@ -10,7 +10,7 @@ import os
 import uuid
 
 from app.models.user import User, UserRole
-from app.models.job import JobDescription, JobDescriptionResponse
+from app.models.job import JobDescription, JobDescriptionResponse, ApplicationMode
 from app.models.resume import Resume, ResumeVersionResponse
 from app.models.application import (
     Application, ApplicationStatus, StatusChange,
@@ -19,10 +19,12 @@ from app.models.application import (
 from app.models.screening import ScreeningResult
 from app.routes.auth import get_current_user, require_candidate
 from app.services.resume_parser import get_resume_parser
+from app.services.matching import get_matching_service
 from app.models.notification import Notification, NotificationType
 from app.services.websocket_manager import get_connection_manager, EventType
 
 router = APIRouter()
+matching_service = get_matching_service()
 
 
 # ==================== Job Browsing ====================
@@ -128,6 +130,9 @@ async def apply_to_job(
     Apply to a job.
     
     Optionally include a resume_id if the candidate has uploaded a resume.
+    The application flow depends on the job's application_mode:
+    - AUTO_INCLUDE: Automatically screen and include in results
+    - REQUIRE_APPROVAL: HR must approve before candidate is screened
     """
     # Check if job exists and is open
     job = await JobDescription.get(job_id)
@@ -149,40 +154,148 @@ async def apply_to_job(
             detail="You have already applied to this job"
         )
     
-    # If resume_id provided, verify it belongs to this user
+    # Get resume - use provided or primary resume 
+    resume = None
     if resume_id:
         resume = await Resume.get(resume_id)
-        if not resume:
+        if not resume or resume.user_id != str(current_user.id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Resume not found"
             )
+    else:
+        # Try to get primary resume first, then fall back to most recent
+        resume = await Resume.find_one({
+            "user_id": str(current_user.id),
+            "is_primary": True
+        })
+        if not resume:
+            # Fall back to most recent resume
+            resumes = await Resume.find(
+                {"user_id": str(current_user.id)}
+            ).sort("-uploaded_at").limit(1).to_list()
+            if resumes:
+                resume = resumes[0]
+        if resume:
+            resume_id = str(resume.id)
+    
+    # Determine initial status based on application mode
+    application_mode = getattr(job, 'application_mode', ApplicationMode.REQUIRE_APPROVAL)
+    
+    if application_mode == ApplicationMode.AUTO_INCLUDE:
+        initial_status = ApplicationStatus.APPLIED
+        is_approved = True
+        status_note = "Application submitted - auto-approved for screening"
+    else:
+        initial_status = ApplicationStatus.PENDING_APPROVAL
+        is_approved = False
+        status_note = "Application submitted - pending HR approval"
     
     # Create application
     application = Application(
         candidate_id=str(current_user.id),
         job_id=job_id,
         resume_id=resume_id,
-        status=ApplicationStatus.APPLIED,
+        status=initial_status,
+        is_approved_for_screening=is_approved,
+        source="candidate_portal",
         status_history=[
             StatusChange(
-                to_status=ApplicationStatus.APPLIED.value,
+                to_status=initial_status.value,
                 changed_at=datetime.utcnow(),
-                note="Application submitted"
+                note=status_note
             )
         ]
     )
     
     await application.insert()
+    
+    # Auto-screen if AUTO_INCLUDE mode and resume is available
+    screening_result = None
+    if application_mode == ApplicationMode.AUTO_INCLUDE and resume and resume.is_parsed:
+        try:
+            # Perform matching for this single candidate
+            results = await matching_service.match_candidates([resume], job)
+            
+            if results and len(results) > 0:
+                result = results[0]
+                
+                # Check if screening result already exists
+                existing_screening = await ScreeningResult.find_one(
+                    ScreeningResult.job_id == str(job.id),
+                    ScreeningResult.resume_id == str(resume.id)
+                )
+                
+                if existing_screening:
+                    # Update existing
+                    existing_screening.overall_score = result["score"]
+                    existing_screening.score_breakdown = result["score_breakdown"]
+                    existing_screening.skill_matches = result["skill_matches"]
+                    existing_screening.matched_skills_count = result["matched_skills_count"]
+                    existing_screening.total_required_skills = len(job.required_skills)
+                    existing_screening.recommendation = result["recommendation"]
+                    existing_screening.application_id = str(application.id)
+                    await existing_screening.save()
+                    screening_result = existing_screening
+                else:
+                    # Create new screening result
+                    screening_result = ScreeningResult(
+                        user_id=job.user_id,  # HR user who owns the job
+                        job_id=str(job.id),
+                        resume_id=str(resume.id),
+                        overall_score=result["score"],
+                        score_breakdown=result["score_breakdown"],
+                        skill_matches=result["skill_matches"],
+                        matched_skills_count=result["matched_skills_count"],
+                        total_required_skills=len(job.required_skills),
+                        recommendation=result["recommendation"],
+                        application_id=str(application.id),
+                    )
+                    await screening_result.insert()
+                
+                # Update application with screening result
+                application.screening_result_id = str(screening_result.id)
+                application.status = ApplicationStatus.SCREENING
+                application.status_history.append(
+                    StatusChange(
+                        from_status=ApplicationStatus.APPLIED.value,
+                        to_status=ApplicationStatus.SCREENING.value,
+                        changed_at=datetime.utcnow(),
+                        note=f"Auto-screened with score: {result['score']:.1f}"
+                    )
+                )
+                await application.save()
+                
+                # Update job candidates count
+                job.candidates_screened = await ScreeningResult.find(
+                    ScreeningResult.job_id == str(job.id)
+                ).count()
+                await job.save()
+                
+        except Exception as e:
+            print(f"⚠️ Auto-screening failed for application {application.id}: {e}")
 
     # ── Notify the HR user who created this job ──
     try:
         candidate_name = current_user.name or current_user.email
+        
+        if application_mode == ApplicationMode.AUTO_INCLUDE:
+            notification_type = NotificationType.NEW_APPLICATION
+            notification_title = "New Candidate Screened"
+            if screening_result:
+                notification_message = f"{candidate_name} applied for {job.title} and was auto-screened (Score: {screening_result.overall_score:.1f})"
+            else:
+                notification_message = f"{candidate_name} applied for {job.title} (auto-included)"
+        else:
+            notification_type = NotificationType.APPLICATION_APPROVAL_REQUIRED
+            notification_title = "Application Needs Approval"
+            notification_message = f"{candidate_name} applied for {job.title}. Review and approve to include in screening."
+        
         notification = Notification(
             recipient_id=job.user_id,
-            type=NotificationType.NEW_APPLICATION,
-            title="New Application Received",
-            message=f"{candidate_name} applied for {job.title}",
+            type=notification_type,
+            title=notification_title,
+            message=notification_message,
             job_id=job_id,
             application_id=str(application.id),
             candidate_id=str(current_user.id),
@@ -201,6 +314,8 @@ async def apply_to_job(
                 "job_title": job.title,
                 "job_id": job_id,
                 "application_id": str(application.id),
+                "requires_approval": application_mode == ApplicationMode.REQUIRE_APPROVAL,
+                "score": screening_result.overall_score if screening_result else None,
             },
             user_id=job.user_id,  # Only send to the HR who owns this job
         )

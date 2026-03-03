@@ -10,14 +10,7 @@ interface MessageBubbleProps {
   formatTime: (date: string) => string;
 }
 
-const BUBBLE_OWN =
-  'bg-candidate-500 dark:bg-candidate-600 text-white rounded-2xl rounded-br-md shadow-sm shadow-candidate-500/20';
-const BUBBLE_OTHER =
-  'bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-gray-900 dark:text-white border border-gray-200/60 dark:border-gray-700/60 rounded-2xl rounded-bl-md';
-
 export default function MessageBubble({ message, isOwn, formatTime }: MessageBubbleProps) {
-  const read = !!message.read_at;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -25,24 +18,24 @@ export default function MessageBubble({ message, isOwn, formatTime }: MessageBub
       transition={{ duration: 0.2 }}
       className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
     >
-      <div className={`max-w-[78%] ${isOwn ? 'order-2' : 'order-1'}`}>
-        <div className={`px-4 py-3 ${isOwn ? BUBBLE_OWN : BUBBLE_OTHER}`}>
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
-        </div>
-        <div
-          className={`flex items-center gap-1.5 mt-1.5 text-xs ${
-            isOwn ? 'justify-end text-candidate-600/80 dark:text-candidate-400/80' : 'justify-start text-gray-500 dark:text-gray-400'
-          }`}
-        >
-          <span>{formatTime(message.sent_at)}</span>
+      <div
+        className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+          isOwn
+            ? 'bg-candidate-500 text-white rounded-br-md'
+            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200/60 dark:border-gray-700/60 rounded-bl-md'
+        }`}
+      >
+        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        <div className={`flex items-center justify-end gap-1 mt-1 ${
+          isOwn ? 'text-white/60' : 'text-gray-400 dark:text-gray-500'
+        }`}>
+          <span className="text-[10px]">
+            {formatTime(message.created_at ?? message.timestamp)}
+          </span>
           {isOwn && (
-            <span className="flex items-center" title={read ? 'Read' : 'Sent'}>
-              {read ? (
-                <CheckCheck className="h-3.5 w-3.5" />
-              ) : (
-                <Check className="h-3.5 w-3.5" />
-              )}
-            </span>
+            message.is_read
+              ? <CheckCheck className="h-3 w-3" />
+              : <Check className="h-3 w-3" />
           )}
         </div>
       </div>

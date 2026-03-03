@@ -7,13 +7,16 @@ from typing import List
 from datetime import datetime
 
 from app.config import settings
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.job import (
     JobDescription, JobDescriptionCreate, JobDescriptionResponse,
     JobDescriptionUpdate, ScreeningRequest
 )
 from app.models.resume import Resume, ResumeWithScore
 from app.models.screening import ScreeningResult, ScreeningResultResponse, ScreeningResultsList
+from app.models.application import Application, ApplicationStatus, StatusChange, ApplicationStatusUpdate
+from app.models.notification import Notification, NotificationType
+from app.models.message import DirectMessage, DirectConversation
 from app.routes.auth import get_current_user
 from app.services.job_parser import JobParserService
 from app.services.matching import get_matching_service
@@ -52,6 +55,7 @@ async def create_job_description(
         salary_range=job_data.salary_range,
         job_type=job_data.job_type,
         company=getattr(current_user, 'company', None),
+        application_mode=job_data.application_mode,
     )
     
     await job.insert()
@@ -83,6 +87,7 @@ async def create_job_description(
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
         company=job.company,
+        application_mode=job.application_mode,
         created_at=job.created_at
     )
 
@@ -122,6 +127,7 @@ async def list_job_descriptions(
             is_active=job.is_active,
             candidates_screened=job.candidates_screened,
             company=job.company,
+            application_mode=job.application_mode,
             created_at=job.created_at
         )
         for job in jobs
@@ -162,6 +168,7 @@ async def get_job_description(
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
         company=job.company,
+        application_mode=job.application_mode,
         created_at=job.created_at
     )
 
@@ -214,6 +221,7 @@ async def update_job_description(
         is_active=job.is_active,
         candidates_screened=job.candidates_screened,
         company=job.company,
+        application_mode=job.application_mode,
         created_at=job.created_at
     )
 
@@ -412,6 +420,24 @@ async def get_screening_results(
     for sr in screening_results:
         resume = await Resume.get(sr.resume_id)
         if resume:
+            # Determine source: check if there's an application linked
+            source = "hr_upload"
+            application_id = None
+            candidate_user_id = None
+            if sr.application_id:
+                source = "candidate_portal"
+                application_id = sr.application_id
+            
+            # Check if the resume's uploader is a candidate (portal user)
+            if resume.user_id:
+                try:
+                    resume_owner = await User.get(resume.user_id)
+                    if resume_owner and resume_owner.role == UserRole.CANDIDATE:
+                        candidate_user_id = resume.user_id
+                        source = "candidate_portal"
+                except Exception:
+                    pass
+            
             results.append(ResumeWithScore(
                 id=str(resume.id),
                 name=resume.parsed_data.name,
@@ -421,8 +447,489 @@ async def get_screening_results(
                 education=resume.parsed_data.education,
                 experience=resume.parsed_data.experience,
                 score=sr.overall_score,
-                skill_matches=[sm.skill for sm in sr.skill_matches if sm.is_matched]
+                skill_matches=[sm.skill for sm in sr.skill_matches if sm.is_matched],
+                source=source,
+                application_id=application_id,
+                candidate_user_id=candidate_user_id,
             ))
     
     return results
+
+
+# ==================== Application Approval Endpoints ====================
+
+@router.get("/{job_id}/applications/pending")
+async def get_pending_applications(
+    job_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all applications pending approval for a job.
+    
+    Only the HR user who created the job can view these.
+    """
+    job = await JobDescription.get(job_id)
+    
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+    
+    if job.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view applications for this job"
+        )
+    
+    # Get pending applications
+    applications = await Application.find({
+        "job_id": job_id,
+        "status": ApplicationStatus.PENDING_APPROVAL.value
+    }).to_list()
+    
+    results = []
+    for app in applications:
+        resume = None
+        candidate_name = "Unknown"
+        
+        if app.resume_id:
+            resume = await Resume.get(app.resume_id)
+            if resume and resume.parsed_data:
+                candidate_name = resume.parsed_data.name or resume.parsed_data.email or "Unknown"
+        
+        # Get candidate user info if no resume name
+        if candidate_name == "Unknown":
+            candidate = await User.get(app.candidate_id)
+            if candidate:
+                candidate_name = candidate.name or candidate.email
+        
+        results.append({
+            "application_id": str(app.id),
+            "candidate_id": app.candidate_id,
+            "candidate_name": candidate_name,
+            "resume_id": app.resume_id,
+            "applied_at": app.applied_at,
+            "status": app.status,
+        })
+    
+    return results
+
+
+@router.put("/applications/{application_id}/approve")
+async def approve_application(
+    application_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Approve a pending application.
+    
+    This will:
+    1. Mark the application as approved
+    2. Auto-screen the candidate's resume against the job
+    3. Add them to the screening results
+    """
+    application = await Application.get(application_id)
+    
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found"
+        )
+    
+    # Check if already processed
+    if application.status != ApplicationStatus.PENDING_APPROVAL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Application is not pending approval (current status: {application.status})"
+        )
+    
+    # Get the job
+    job = await JobDescription.get(application.job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+    
+    # Verify HR owns this job
+    if job.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to approve applications for this job"
+        )
+    
+    # Update application
+    application.status = ApplicationStatus.APPLIED
+    application.is_approved_for_screening = True
+    application.approval_decision_at = datetime.utcnow()
+    application.approval_decision_by = str(current_user.id)
+    application.status_history.append(
+        StatusChange(
+            from_status=ApplicationStatus.PENDING_APPROVAL.value,
+            to_status=ApplicationStatus.APPLIED.value,
+            changed_at=datetime.utcnow(),
+            changed_by=str(current_user.id),
+            note="Application approved by HR"
+        )
+    )
+    
+    screening_result = None
+    
+    # Auto-screen if resume available
+    if application.resume_id:
+        resume = await Resume.get(application.resume_id)
+        if resume and resume.is_parsed:
+            try:
+                results = await matching_service.match_candidates([resume], job)
+                
+                if results and len(results) > 0:
+                    result = results[0]
+                    
+                    # Check if screening result exists
+                    existing = await ScreeningResult.find_one(
+                        ScreeningResult.job_id == str(job.id),
+                        ScreeningResult.resume_id == str(resume.id)
+                    )
+                    
+                    if existing:
+                        existing.overall_score = result["score"]
+                        existing.score_breakdown = result["score_breakdown"]
+                        existing.skill_matches = result["skill_matches"]
+                        existing.matched_skills_count = result["matched_skills_count"]
+                        existing.total_required_skills = len(job.required_skills)
+                        existing.recommendation = result["recommendation"]
+                        existing.application_id = str(application.id)
+                        await existing.save()
+                        screening_result = existing
+                    else:
+                        screening_result = ScreeningResult(
+                            user_id=str(current_user.id),
+                            job_id=str(job.id),
+                            resume_id=str(resume.id),
+                            overall_score=result["score"],
+                            score_breakdown=result["score_breakdown"],
+                            skill_matches=result["skill_matches"],
+                            matched_skills_count=result["matched_skills_count"],
+                            total_required_skills=len(job.required_skills),
+                            recommendation=result["recommendation"],
+                            application_id=str(application.id),
+                        )
+                        await screening_result.insert()
+                    
+                    # Update application with screening result
+                    application.screening_result_id = str(screening_result.id)
+                    application.status = ApplicationStatus.SCREENING
+                    application.status_history.append(
+                        StatusChange(
+                            from_status=ApplicationStatus.APPLIED.value,
+                            to_status=ApplicationStatus.SCREENING.value,
+                            changed_at=datetime.utcnow(),
+                            note=f"Auto-screened with score: {result['score']:.1f}"
+                        )
+                    )
+                    
+                    # Update job candidates count
+                    job.candidates_screened = await ScreeningResult.find(
+                        ScreeningResult.job_id == str(job.id)
+                    ).count()
+                    await job.save()
+                    
+            except Exception as e:
+                print(f"\u26a0\ufe0f Screening failed for approved application {application.id}: {e}")
+    
+    await application.save()
+    
+    # Notify candidate (optional - can be enabled later)
+    # For now, just broadcast to HR
+    ws_manager = get_connection_manager()
+    await ws_manager.broadcast_event(
+        EventType.CANDIDATE_SCORED,
+        {
+            "job_id": str(job.id),
+            "job_title": job.title,
+            "application_id": str(application.id),
+            "action": "approved",
+            "score": screening_result.overall_score if screening_result else None,
+        },
+        user_id=str(current_user.id)
+    )
+    
+    return {
+        "message": "Application approved successfully",
+        "application_id": str(application.id),
+        "screening_result_id": str(screening_result.id) if screening_result else None,
+        "score": screening_result.overall_score if screening_result else None
+    }
+
+
+@router.put("/applications/{application_id}/reject")
+async def reject_application(
+    application_id: str,
+    reason: str = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Reject a pending application.
+    
+    The candidate will not be screened or included in results.
+    """
+    application = await Application.get(application_id)
+    
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found"
+        )
+    
+    # Check if already processed
+    if application.status != ApplicationStatus.PENDING_APPROVAL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Application is not pending approval (current status: {application.status})"
+        )
+    
+    # Get the job
+    job = await JobDescription.get(application.job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+    
+    # Verify HR owns this job
+    if job.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to reject applications for this job"
+        )
+    
+    # Update application
+    application.status = ApplicationStatus.REJECTED
+    application.is_approved_for_screening = False
+    application.approval_decision_at = datetime.utcnow()
+    application.approval_decision_by = str(current_user.id)
+    application.status_history.append(
+        StatusChange(
+            from_status=ApplicationStatus.PENDING_APPROVAL.value,
+            to_status=ApplicationStatus.REJECTED.value,
+            changed_at=datetime.utcnow(),
+            changed_by=str(current_user.id),
+            note=reason or "Application rejected by HR"
+        )
+    )
+    
+    await application.save()
+    
+    # Optionally notify the candidate
+    try:
+        candidate = await User.get(application.candidate_id)
+        if candidate:
+            notification = Notification(
+                recipient_id=application.candidate_id,
+                type=NotificationType.APPLICATION_REJECTED,
+                title="Application Update",
+                message=f"Your application for {job.title} was not selected to proceed.",
+                job_id=str(job.id),
+                application_id=str(application.id),
+                job_title=job.title,
+            )
+            await notification.insert()
+    except Exception as e:
+        print(f"\u26a0\ufe0f Failed to notify candidate of rejection: {e}")
+    
+    return {
+        "message": "Application rejected",
+        "application_id": str(application.id),
+    }
+
+
+@router.put("/applications/{application_id}/status")
+async def update_application_status(
+    application_id: str,
+    body: ApplicationStatusUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update an application's pipeline status (e.g. hired, rejected, interview, offer).
+
+    Creates a notification for the candidate, sends a WebSocket push,
+    and auto-sends a direct message informing them of the decision.
+    """
+    application = await Application.get(application_id)
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found",
+        )
+
+    # Get the job and verify ownership
+    job = await JobDescription.get(application.job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+    if job.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update applications for this job",
+        )
+
+    new_status = body.status
+    old_status = application.status
+
+    # Update application status + history
+    application.status = new_status
+    application.updated_at = datetime.utcnow()
+    application.status_history.append(
+        StatusChange(
+            from_status=old_status.value,
+            to_status=new_status.value,
+            changed_at=datetime.utcnow(),
+            changed_by=str(current_user.id),
+            note=body.note,
+        )
+    )
+    await application.save()
+
+    # Keep denormalized screening result in sync
+    try:
+        if application.screening_result_id:
+            sr = await ScreeningResult.get(application.screening_result_id)
+            if sr:
+                sr.application_status = new_status.value
+                await sr.save()
+    except Exception:
+        pass
+
+    # ---- Candidate notification + messaging ----
+    candidate_id = application.candidate_id
+    candidate = await User.get(candidate_id) if candidate_id else None
+
+    if candidate:
+        # Build human-friendly messages
+        if new_status == ApplicationStatus.HIRED:
+            notif_title = "Congratulations! You're Hired!"
+            notif_message = f"Great news! You have been selected for the position of {job.title}. We look forward to having you on board!"
+            dm_content = f"🎉 Congratulations! You have been hired for the position of {job.title}! We are excited to welcome you to the team. We'll be in touch with next steps soon."
+            notif_type = NotificationType.APPLICATION_HIRED
+        elif new_status == ApplicationStatus.REJECTED:
+            notif_title = "Application Update"
+            notif_message = f"Thank you for your interest in {job.title}. After careful consideration, we have decided to move forward with other candidates."
+            dm_content = f"Thank you for your interest in the {job.title} position. After careful consideration, we've decided to move forward with other candidates. We appreciate the time you invested and wish you the best in your career search."
+            notif_type = NotificationType.APPLICATION_REJECTED
+        elif new_status == ApplicationStatus.OFFER:
+            notif_title = "You Have an Offer!"
+            notif_message = f"Exciting news! An offer is being extended for the {job.title} position. Check your messages for details."
+            dm_content = f"We're pleased to inform you that we'd like to extend an offer for the {job.title} position! Please stay tuned for the detailed offer letter and next steps."
+            notif_type = NotificationType.GENERAL
+        elif new_status == ApplicationStatus.INTERVIEW:
+            notif_title = "Interview Scheduled"
+            notif_message = f"You've been moved to the interview stage for {job.title}. We'll reach out with scheduling details."
+            dm_content = f"Good news! You've been selected for an interview for the {job.title} position. We'll be in touch shortly with scheduling details."
+            notif_type = NotificationType.GENERAL
+        else:
+            notif_title = "Application Status Update"
+            notif_message = f"Your application for {job.title} has been updated to: {new_status.value}."
+            dm_content = None  # Don't auto-DM for generic status changes
+            notif_type = NotificationType.GENERAL
+
+        # 1) Create in-app notification
+        try:
+            notification = Notification(
+                recipient_id=candidate_id,
+                type=notif_type,
+                title=notif_title,
+                message=notif_message,
+                job_id=str(job.id),
+                application_id=str(application.id),
+                candidate_id=candidate_id,
+                candidate_name=candidate.name if candidate else None,
+                job_title=job.title,
+            )
+            await notification.insert()
+        except Exception as e:
+            print(f"⚠️ Failed to create notification: {e}")
+
+        # 2) Push WebSocket event to candidate
+        try:
+            ws_manager = get_connection_manager()
+            await ws_manager.broadcast_event(
+                EventType.APPLICATION_STATUS_CHANGED,
+                {
+                    "application_id": str(application.id),
+                    "job_id": str(job.id),
+                    "job_title": job.title,
+                    "new_status": new_status.value,
+                    "old_status": old_status.value,
+                    "note": body.note,
+                },
+                user_id=candidate_id,
+            )
+        except Exception as e:
+            print(f"⚠️ WebSocket broadcast failed: {e}")
+
+        # 3) Auto-send a direct message from HR to candidate
+        if dm_content:
+            try:
+                hr_id = str(current_user.id)
+                sorted_ids = sorted([hr_id, candidate_id])
+                slot_hr = sorted_ids[0]
+                slot_candidate = sorted_ids[1]
+
+                conversation = await DirectConversation.find_one({
+                    "hr_user_id": slot_hr,
+                    "candidate_user_id": slot_candidate,
+                })
+                if not conversation:
+                    conversation = DirectConversation(
+                        hr_user_id=slot_hr,
+                        candidate_user_id=slot_candidate,
+                        job_id=str(job.id),
+                    )
+                    await conversation.insert()
+
+                dm = DirectMessage(
+                    conversation_id=str(conversation.id),
+                    sender_id=hr_id,
+                    receiver_id=candidate_id,
+                    content=dm_content,
+                )
+                await dm.insert()
+
+                conversation.last_message_at = dm.sent_at
+                conversation.last_message_preview = dm_content[:100]
+                if candidate_id == conversation.hr_user_id:
+                    conversation.unread_count_hr += 1
+                else:
+                    conversation.unread_count_candidate += 1
+                # Un-delete for both users
+                if conversation.deleted_for_users:
+                    conversation.deleted_for_users = []
+                await conversation.save()
+
+                # Push new_message WS event so candidate messages page updates
+                await ws_manager.broadcast_event(
+                    EventType.NEW_MESSAGE,
+                    {
+                        "message_id": str(dm.id),
+                        "conversation_id": str(conversation.id),
+                        "sender_id": hr_id,
+                        "sender_name": current_user.name,
+                        "receiver_id": candidate_id,
+                        "content": dm_content[:100],
+                        "sent_at": dm.sent_at.isoformat() if dm.sent_at else None,
+                    },
+                    user_id=candidate_id,
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to auto-send DM: {e}")
+
+    return {
+        "message": f"Application status updated to {new_status.value}",
+        "application_id": str(application.id),
+        "new_status": new_status.value,
+        "old_status": old_status.value,
+    }
 

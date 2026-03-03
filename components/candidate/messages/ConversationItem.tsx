@@ -1,106 +1,99 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { User, Building } from 'lucide-react';
+import { Trash2, Briefcase } from 'lucide-react';
 import type { ChatConversation } from '@/store/useStore';
 
-const CARD_CLASS =
-  'w-full text-left p-4 rounded-xl border border-transparent transition-all duration-200';
+function getDisplayName(c: ChatConversation): string {
+  return c.other_user?.name ?? (c as any).hr_user_name ?? 'Recruiter';
+}
 
 interface ConversationItemProps {
   conversation: ChatConversation;
   isSelected: boolean;
   onClick: () => void;
+  onDelete?: (e: React.MouseEvent) => void;
   formatTime: (date: string) => string;
-}
-
-function getDisplayName(c: ChatConversation): string {
-  return c.other_user?.name ?? (c as any).hr_user_name ?? 'Recruiter';
 }
 
 export default function ConversationItem({
   conversation,
   isSelected,
   onClick,
+  onDelete,
   formatTime,
 }: ConversationItemProps) {
-  const unread = (conversation.unread_count_candidate ?? conversation.unread_count ?? 0) > 0;
   const displayName = getDisplayName(conversation);
-  const jobOrCompany = conversation.job_title || (conversation as any).company;
-  const preview = conversation.last_message_preview || 'No messages yet';
+  const hasUnread = (conversation.unread_count ?? 0) > 0;
+  const lastMsg = conversation.last_message ?? conversation.last_message_preview ?? '';
+  const lastTime = conversation.last_message_time ?? conversation.updated_at;
 
   return (
-    <motion.button
-      type="button"
+    <motion.div
+      layout
       onClick={onClick}
-      whileHover={{ x: 2 }}
-      whileTap={{ scale: 0.99 }}
-      className={`${CARD_CLASS} relative group ${
+      className={`group relative flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all duration-150 ${
         isSelected
-          ? 'bg-candidate-500/10 dark:bg-candidate-500/15 border-candidate-500/30 dark:border-candidate-500/30 shadow-sm shadow-candidate-500/10'
-          : 'hover:bg-gray-100/80 dark:hover:bg-gray-800/50 hover:border-gray-200/60 dark:hover:border-gray-700/60'
+          ? 'bg-candidate-50 dark:bg-candidate-950/30 border border-candidate-200/60 dark:border-candidate-800/40'
+          : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent'
       }`}
     >
-      {isSelected && (
-        <motion.div
-          layoutId="activeConversation"
-          className="absolute left-0 top-2 bottom-2 w-1 bg-candidate-500 dark:bg-candidate-400 rounded-r-full"
-          transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
-        />
+      {/* Avatar */}
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+        isSelected
+          ? 'bg-candidate-500/15 text-candidate-600 dark:text-candidate-400 border border-candidate-500/25'
+          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200/60 dark:border-gray-700/60'
+      }`}>
+        {displayName.charAt(0).toUpperCase()}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className={`text-sm truncate ${
+            hasUnread ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-700 dark:text-gray-300'
+          }`}>
+            {displayName}
+          </span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {lastTime && (
+              <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                {formatTime(lastTime)}
+              </span>
+            )}
+          </div>
+        </div>
+        {conversation.job_title && (
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate flex items-center gap-1 mt-0.5">
+            <Briefcase className="h-2.5 w-2.5 flex-shrink-0" />
+            {conversation.job_title}
+          </p>
+        )}
+        <p className={`text-xs truncate mt-0.5 ${
+          hasUnread ? 'text-gray-700 dark:text-gray-300 font-medium' : 'text-gray-500 dark:text-gray-400'
+        }`}>
+          {lastMsg || 'No messages yet'}
+        </p>
+      </div>
+
+      {/* Unread badge */}
+      {hasUnread && (
+        <span className="absolute top-3 right-3 px-1.5 py-0.5 bg-candidate-500 text-white text-[10px] font-bold rounded-full min-w-[18px] text-center">
+          {conversation.unread_count}
+        </span>
       )}
 
-      <div className="flex items-start gap-3">
-        <div className="relative flex-shrink-0">
-          <div
-            className={`w-11 h-11 rounded-xl flex items-center justify-center ${
-              isSelected
-                ? 'bg-candidate-500/20 dark:bg-candidate-500/25 border border-candidate-500/30 shadow-sm shadow-candidate-500/15'
-                : 'bg-gray-200/80 dark:bg-gray-700/80 border border-gray-200/60 dark:border-gray-600/60'
-            }`}
-          >
-            <User className="h-5 w-5 text-candidate-600 dark:text-candidate-400" />
-          </div>
-          {unread && (
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-candidate-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-gray-900">
-              {conversation.unread_count_candidate ?? conversation.unread_count ?? 1}
-            </span>
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
-            <span
-              className={`font-semibold truncate text-sm ${
-                unread ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {displayName}
-            </span>
-            <span
-              className={`text-xs flex-shrink-0 ${
-                unread ? 'text-candidate-600 dark:text-candidate-400 font-medium' : 'text-gray-500 dark:text-gray-400'
-              }`}
-            >
-              {formatTime(conversation.last_message_at)}
-            </span>
-          </div>
-          {jobOrCompany && (
-            <div className="flex items-center gap-1.5 mb-1">
-              <Building className="h-3 w-3 text-candidate-500 flex-shrink-0" />
-              <span className="text-xs text-candidate-600 dark:text-candidate-400 truncate">
-                {jobOrCompany}
-              </span>
-            </div>
-          )}
-          <p
-            className={`text-sm truncate ${
-              unread ? 'text-gray-800 dark:text-gray-200 font-medium' : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            {preview}
-          </p>
-        </div>
-      </div>
-    </motion.button>
+      {/* Delete button on hover */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="absolute bottom-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+          title="Delete conversation"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </motion.div>
   );
 }

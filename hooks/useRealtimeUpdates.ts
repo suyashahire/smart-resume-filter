@@ -21,6 +21,8 @@ export type RealtimeEventType =
   | 'job_created'
   | 'job_deleted'
   | 'new_application'
+  | 'new_message'
+  | 'application_status_changed'
   | 'connection_established';
 
 export interface RealtimeEvent {
@@ -227,6 +229,10 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
         console.log('📩 New application:', event.data);
         break;
 
+      case 'new_message':
+        console.log('💬 New message:', event.data);
+        break;
+
       case 'pipeline_status_changed':
         // Update pipeline status
         console.log('📊 Pipeline status changed:', event.data);
@@ -296,11 +302,12 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
  * Hook for displaying real-time notifications
  */
 export function useRealtimeNotifications() {
-  const [notifications, setNotifications] = useState<Array<{
+  const [notifications, setNotificationsState] = useState<Array<{
     id: string;
     type: RealtimeEventType;
     message: string;
     timestamp: Date;
+    data?: Record<string, unknown>;  // Include event data for action buttons
   }>>([]);
 
   const addNotification = useCallback((event: RealtimeEvent) => {
@@ -317,7 +324,12 @@ export function useRealtimeNotifications() {
         case 'job_deleted':
           return `Job deleted: ${event.data.title}`;
         case 'new_application':
+          if (event.data.requires_approval) {
+            return `${event.data.candidate_name || 'A candidate'} applied for ${event.data.job_title || 'a position'} - needs approval`;
+          }
           return `${event.data.candidate_name || 'A candidate'} applied for ${event.data.job_title || 'a position'}`;
+        case 'new_message':
+          return `New message from ${event.data.sender_name || 'someone'}`;
         default:
           return `Update received`;
       }
@@ -327,24 +339,44 @@ export function useRealtimeNotifications() {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: event.type,
       message: getMessage(event),
-      timestamp: new Date()
+      timestamp: new Date(),
+      data: event.data,  // Preserve the event data
     };
 
-    setNotifications(prev => [notification, ...prev].slice(0, 10));
+    setNotificationsState(prev => {
+      // Deduplicate by application_id to avoid showing same notification from DB + WS
+      const appId = notification.data?.application_id;
+      if (appId) {
+        const existing = prev.find(n => n.data?.application_id === appId);
+        if (existing) return prev;
+      }
+      return [notification, ...prev].slice(0, 20);
+    });
   }, []);
 
   const clearNotifications = useCallback(() => {
-    setNotifications([]);
+    setNotificationsState([]);
   }, []);
 
   const dismissNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotificationsState(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const setNotifications = useCallback((items: Array<{
+    id: string;
+    type: RealtimeEventType;
+    message: string;
+    timestamp: Date;
+    data?: Record<string, unknown>;
+  }>) => {
+    setNotificationsState(items);
   }, []);
 
   return {
     notifications,
     addNotification,
     clearNotifications,
-    dismissNotification
+    dismissNotification,
+    setNotifications
   };
 }

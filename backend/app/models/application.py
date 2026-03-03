@@ -11,6 +11,7 @@ from enum import Enum
 
 class ApplicationStatus(str, Enum):
     """Status of a job application."""
+    PENDING_APPROVAL = "pending_approval"  # Waiting for HR to approve for screening
     APPLIED = "applied"
     SCREENING = "screening"
     INTERVIEW = "interview"
@@ -47,6 +48,14 @@ class Application(Document):
     
     # Link to screening result (created when HR screens the candidate)
     screening_result_id: Optional[str] = None
+    
+    # Approval tracking (for jobs with require_approval mode)
+    is_approved_for_screening: bool = Field(default=False)
+    approval_decision_at: Optional[datetime] = None
+    approval_decision_by: Optional[str] = None  # HR user ID who approved/rejected
+    
+    # Source tracking
+    source: str = Field(default="candidate_portal")  # "candidate_portal" or "hr_upload"
     
     # Timestamps
     applied_at: datetime = Field(default_factory=datetime.utcnow)

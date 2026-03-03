@@ -48,6 +48,9 @@ class DirectConversation(Document):
     unread_count_hr: int = 0
     unread_count_candidate: int = 0
     
+    # Per-user soft delete: list of user IDs who have deleted this conversation
+    deleted_for_users: List[str] = Field(default_factory=list)
+    
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     

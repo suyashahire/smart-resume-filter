@@ -151,7 +151,7 @@ export default function UploadResumePage() {
   const handleAssignToExistingJobs = async () => {
     if (selectedJobIds.size === 0) {
       setShowJobAssignmentModal(false);
-      router.push('/results');
+      router.push(`/results?t=${Date.now()}`);
       return;
     }
 
@@ -227,9 +227,9 @@ export default function UploadResumePage() {
       setShowJobAssignmentModal(false);
       const firstJobId = Array.from(selectedJobIds)[0];
       if (firstJobId) {
-        router.push(`/results?jobId=${firstJobId}`);
+        router.push(`/results?jobId=${firstJobId}&t=${Date.now()}`);
       } else {
-        router.push('/results');
+        router.push(`/results?t=${Date.now()}`);
       }
     }
   };
@@ -461,93 +461,166 @@ export default function UploadResumePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(12px)' }}
             onClick={() => {}} // Don't close on backdrop click - user must choose
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.96, opacity: 0, y: 12 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="backdrop-blur-xl bg-white/95 dark:bg-gray-900/95 rounded-3xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-auto border border-white/50 dark:border-gray-800/50"
+              exit={{ scale: 0.96, opacity: 0, y: 12 }}
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              className="w-full max-h-[90vh] overflow-auto"
+              style={{
+                maxWidth: '720px',
+                backgroundColor: '#0D1117',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '16px',
+                boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)',
+              }}
             >
               {/* Success Header */}
-              <div className="p-6 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-b border-emerald-200/50 dark:border-emerald-800/50">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
-                    <CheckCircle className="h-7 w-7" />
+              <div style={{ padding: '32px 32px 24px 32px' }}>
+                <div className="flex items-start gap-4">
+                  <div
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      background: 'rgba(52, 211, 153, 0.12)',
+                      border: '1px solid rgba(52, 211, 153, 0.2)',
+                    }}
+                  >
+                    <CheckCircle className="h-5 w-5" style={{ color: '#34D399' }} />
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {isProcessing ? 'Screening Candidates...' : 'Processing Complete!'}
+                  <div className="flex-1 min-w-0">
+                    <h2
+                      style={{
+                        fontSize: '22px',
+                        fontWeight: 600,
+                        color: '#F0F6FC',
+                        lineHeight: '1.3',
+                        letterSpacing: '-0.02em',
+                        margin: 0,
+                      }}
+                    >
+                      {isProcessing ? 'Screening Candidates…' : 'Processing Complete'}
                     </h2>
-                    <p className="text-emerald-600 dark:text-emerald-400 font-medium">
-                      {isProcessing ? processingStatus : `${processedResumeIds.length} candidate${processedResumeIds.length > 1 ? 's' : ''} ready`}
-                    </p>
+                    <div className="flex items-center gap-3" style={{ marginTop: '8px' }}>
+                      {!isProcessing && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 12px',
+                            borderRadius: '20px',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: '#34D399',
+                            background: 'rgba(52, 211, 153, 0.1)',
+                            border: '1px solid rgba(52, 211, 153, 0.15)',
+                          }}
+                        >
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34D399' }} />
+                          {processedResumeIds.length} candidate{processedResumeIds.length > 1 ? 's' : ''} ready
+                        </span>
+                      )}
+                      {isProcessing && (
+                        <span style={{ fontSize: '14px', color: '#8B949E' }}>{processingStatus}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Screening Loading Overlay */}
               {isProcessing && (
-                <div className="p-8 flex flex-col items-center justify-center">
-                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                  <p className="text-gray-700 dark:text-gray-300 font-medium text-center">
+                <div style={{ padding: '24px 32px 40px 32px' }} className="flex flex-col items-center justify-center">
+                  <div
+                    className="animate-spin"
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      border: '3px solid rgba(255,255,255,0.08)',
+                      borderTopColor: '#58A6FF',
+                      borderRadius: '50%',
+                      marginBottom: '16px',
+                    }}
+                  />
+                  <p style={{ color: '#C9D1D9', fontWeight: 500, fontSize: '14px', textAlign: 'center' }}>
                     {processingStatus}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">
-                    This may take a moment depending on the number of candidates and jobs...
+                  <p style={{ color: '#484F58', fontSize: '13px', textAlign: 'center', marginTop: '8px' }}>
+                    This may take a moment depending on the number of candidates…
                   </p>
                 </div>
               )}
 
               {/* Options - hidden during screening processing */}
               {!isProcessing && (
-              <div className="p-6 space-y-4">
-                <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
-                  What would you like to do with these candidates?
+              <div style={{ padding: '0 32px 24px 32px' }}>
+                {/* Separator line */}
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '24px' }} />
+
+                <p style={{ fontSize: '14px', color: '#8B949E', fontWeight: 400, marginBottom: '20px' }}>
+                  Choose how to proceed with your candidates
                 </p>
 
                 {/* Option 1: Assign to Existing Job */}
                 {openJobs.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <Briefcase className="h-5 w-5 text-blue-500" />
+                  <div style={{ marginBottom: '16px' }}>
+                    <h3
+                      className="flex items-center gap-2"
+                      style={{ fontSize: '13px', fontWeight: 500, color: '#8B949E', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '12px' }}
+                    >
+                      <Briefcase className="h-3.5 w-3.5" style={{ color: '#58A6FF' }} />
                       Assign to Existing Job
                     </h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-2 max-h-48 overflow-y-auto" style={{ paddingRight: '4px' }}>
                       {openJobs.map((job) => (
                         <motion.button
                           key={job.id}
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
+                          whileHover={{ scale: 1.005 }}
+                          whileTap={{ scale: 0.995 }}
                           onClick={() => toggleJobSelection(job.id)}
-                          className={`w-full p-4 rounded-xl border transition-all flex items-center gap-3 ${
-                            selectedJobIds.has(job.id)
-                              ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 ring-2 ring-blue-500/30'
-                              : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-500/50'
-                          }`}
+                          className="w-full flex items-center gap-3 transition-all"
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: '10px',
+                            border: selectedJobIds.has(job.id)
+                              ? '1px solid rgba(88, 166, 255, 0.4)'
+                              : '1px solid rgba(255,255,255,0.06)',
+                            background: selectedJobIds.has(job.id)
+                              ? 'rgba(88, 166, 255, 0.08)'
+                              : 'rgba(255,255,255,0.02)',
+                          }}
                         >
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            selectedJobIds.has(job.id)
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
-                          }`}>
+                          <div
+                            className="flex items-center justify-center flex-shrink-0"
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '8px',
+                              background: selectedJobIds.has(job.id) ? '#58A6FF' : 'rgba(255,255,255,0.06)',
+                            }}
+                          >
                             {selectedJobIds.has(job.id) ? (
-                              <CheckCircle className="h-5 w-5" />
+                              <CheckCircle className="h-4 w-4" style={{ color: '#fff' }} />
                             ) : (
-                              <Plus className="h-5 w-5" />
+                              <Plus className="h-4 w-4" style={{ color: '#484F58' }} />
                             )}
                           </div>
                           <div className="flex-1 text-left">
-                            <p className="font-semibold text-gray-900 dark:text-white">{job.title}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                            <p style={{ fontWeight: 500, fontSize: '14px', color: '#F0F6FC' }}>{job.title}</p>
+                            <p className="flex items-center gap-2" style={{ fontSize: '12px', color: '#484F58', marginTop: '2px' }}>
                               {job.status === 'open' ? (
-                                <><Play className="h-3 w-3 text-emerald-500" /> Open</>
+                                <><Play className="h-3 w-3" style={{ color: '#34D399' }} /> Open</>
                               ) : (
-                                <><Edit3 className="h-3 w-3 text-amber-500" /> Draft</>
+                                <><Edit3 className="h-3 w-3" style={{ color: '#D29922' }} /> Draft</>
                               )}
-                              <span>•</span>
+                              <span>·</span>
                               <Users className="h-3 w-3" />
                               {job.candidateCount} candidates
                             </p>
@@ -558,16 +631,27 @@ export default function UploadResumePage() {
                     
                     {selectedJobIds.size > 0 && (
                       <motion.button
-                        initial={{ opacity: 0, y: 10 }}
+                        initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
                         onClick={handleAssignToExistingJobs}
-                        className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+                        className="w-full flex items-center justify-center gap-2"
+                        style={{
+                          marginTop: '12px',
+                          padding: '12px 20px',
+                          borderRadius: '10px',
+                          background: '#58A6FF',
+                          color: '#fff',
+                          fontWeight: 600,
+                          fontSize: '14px',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
                       >
-                        <Briefcase className="h-5 w-5" />
+                        <Briefcase className="h-4 w-4" />
                         Assign to {selectedJobIds.size} Job{selectedJobIds.size > 1 ? 's' : ''} & View Results
-                        <ArrowRight className="h-5 w-5" />
+                        <ArrowRight className="h-4 w-4" />
                       </motion.button>
                     )}
                   </div>
@@ -575,50 +659,124 @@ export default function UploadResumePage() {
 
                 {/* Divider */}
                 {openJobs.length > 0 && (
-                  <div className="relative py-4">
+                  <div className="relative" style={{ padding: '12px 0' }}>
                     <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.06)' }} />
                     </div>
                     <div className="relative flex justify-center">
-                      <span className="px-4 bg-white dark:bg-gray-900 text-sm text-gray-500">or</span>
+                      <span style={{ padding: '0 12px', background: '#0D1117', fontSize: '12px', color: '#484F58', fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>or</span>
                     </div>
                   </div>
                 )}
 
-                {/* Option 2: Create New Job */}
+                {/* Primary Action: Create Job & Match Candidates */}
                 <motion.button
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.99 }}
                   onClick={handleCreateNewJob}
-                  className="w-full p-5 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-dashed border-emerald-400 dark:border-emerald-600 rounded-2xl hover:border-emerald-500 transition-all group"
+                  className="w-full group transition-all"
+                  style={{
+                    padding: '20px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(255,255,255,0.03)',
+                    cursor: 'pointer',
+                    marginTop: '4px',
+                  }}
                 >
-                  <div className="flex items-center justify-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition-transform">
-                      <FolderPlus className="h-6 w-6" />
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '10px',
+                        background: 'rgba(52, 211, 153, 0.1)',
+                        border: '1px solid rgba(52, 211, 153, 0.15)',
+                      }}
+                    >
+                      <FolderPlus className="h-5 w-5" style={{ color: '#34D399' }} />
                     </div>
-                    <div className="text-left">
-                      <p className="font-bold text-gray-900 dark:text-white text-lg">Create New Job</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Define job requirements and match candidates
+                    <div className="flex-1 text-left">
+                      <p style={{ fontWeight: 600, fontSize: '15px', color: '#F0F6FC', marginBottom: '2px' }}>
+                        Create Job & Match Candidates
+                      </p>
+                      <p style={{ fontSize: '13px', color: '#8B949E', fontWeight: 400 }}>
+                        Define role requirements and auto-match uploaded resumes
                       </p>
                     </div>
-                    <ArrowRight className="h-6 w-6 text-emerald-500 group-hover:translate-x-2 transition-transform" />
+                    <ArrowRight
+                      className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-200"
+                      style={{ color: '#484F58' }}
+                    />
+                  </div>
+                </motion.button>
+
+                {/* Secondary Action: View Candidates */}
+                <motion.button
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => {
+                    setShowJobAssignmentModal(false);
+                    router.push(`/results?t=${Date.now()}`);
+                  }}
+                  className="w-full group transition-all"
+                  style={{
+                    padding: '16px 20px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    marginTop: '8px',
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <Users className="h-5 w-5" style={{ color: '#8B949E' }} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p style={{ fontWeight: 500, fontSize: '14px', color: '#C9D1D9' }}>
+                        View Candidates
+                      </p>
+                      <p style={{ fontSize: '13px', color: '#484F58', fontWeight: 400 }}>
+                        Browse all uploaded candidates without job matching
+                      </p>
+                    </div>
+                    <ArrowRight
+                      className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200"
+                      style={{ color: '#30363D' }}
+                    />
                   </div>
                 </motion.button>
 
                 {/* No jobs message */}
                 {openJobs.length === 0 && (
-                  <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-                    No existing jobs found. Create a new job to get started!
+                  <p style={{ textAlign: 'center', fontSize: '13px', color: '#484F58', marginTop: '16px' }}>
+                    No existing jobs yet — create one to start matching.
                   </p>
                 )}
               </div>
               )}
 
               {/* Footer */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                  You can always assign candidates to jobs later from the Results page
+              <div
+                style={{
+                  padding: '16px 32px',
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(255,255,255,0.015)',
+                }}
+              >
+                <p style={{ fontSize: '12px', color: '#484F58', textAlign: 'center', fontWeight: 400 }}>
+                  Candidates can be assigned to jobs anytime from the Results page.
                 </p>
               </div>
             </motion.div>

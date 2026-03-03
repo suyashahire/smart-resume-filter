@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Trash2 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import * as api from '@/lib/api';
 import type { ChatConversation } from '@/store/useStore';
 import { ConversationList, ChatWindow } from '@/components/candidate/messages';
@@ -24,6 +26,35 @@ export default function CandidateMessagesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [showTypingIndicator, setShowTypingIndicator] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const selectedConversationRef = useRef<ChatConversation | null>(null);
+
+  // Keep ref in sync for WebSocket callback
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  // Real-time message updates via WebSocket
+  useRealtimeUpdates({
+    userId: user?.id,
+    enabled: !!user?.id,
+    onEvent: useCallback((event) => {
+      if (event.type === 'new_message') {
+        const data = event.data as any;
+        const currentConv = selectedConversationRef.current;
+        if (currentConv && data.conversation_id === currentConv.id) {
+          api.getConversationMessages(currentConv.id).then(res => {
+            setCurrentConversationMessages(res.messages || []);
+          }).catch(() => {});
+        }
+        // Refresh conversation list
+        api.getConversations().then(res => {
+          setConversations(res.conversations || []);
+        }).catch(() => {});
+      }
+    }, [setConversations, setCurrentConversationMessages]),
+  });
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -63,6 +94,20 @@ export default function CandidateMessagesPage() {
     },
     [fetchMessages]
   );
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await api.deleteConversation(conversationId);
+      setConversations(conversations.filter(c => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setCurrentConversationMessages([]);
+      }
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+    }
+  };
 
   const receiverId = selectedConversation?.other_user?.id ?? selectedConversation?.hr_user_id;
 
@@ -128,9 +173,6 @@ export default function CandidateMessagesPage() {
       const unread = c.unread_count_candidate ?? c.unread_count ?? 0;
       return matchesSearch && unread > 0;
     }
-    if (activeFilter === 'interviews' || activeFilter === 'offers') {
-      return matchesSearch;
-    }
     return matchesSearch;
   });
 
@@ -163,6 +205,7 @@ export default function CandidateMessagesPage() {
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
             onSelectConversation={handleSelectConversation}
+            onDeleteConversation={(id) => setDeleteConfirm(id)}
             formatTime={formatTime}
             isLoading={isLoading}
             totalUnread={totalUnread}
@@ -190,10 +233,58 @@ export default function CandidateMessagesPage() {
               onBack={() => setSelectedConversation(null)}
               formatTime={formatTime}
               showTypingIndicator={showTypingIndicator}
+              onDeleteConversation={
+                selectedConversation ? () => setDeleteConfirm(selectedConversation.id) : undefined
+              }
             />
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 border border-gray-200/60 dark:border-gray-700/60"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Chat</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                This will delete the conversation only for you. The other person will still be able to see it. A new message from either side will restore the conversation.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteConversation(deleteConfirm)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors shadow-lg shadow-red-500/25"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
