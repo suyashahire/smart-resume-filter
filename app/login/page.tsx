@@ -1,12 +1,129 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Brain, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, User, ArrowRight, Shield, Zap, BarChart3, Clock, Building } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Mail,
+  Lock,
+  User,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Brain,
+  Wifi,
+  WifiOff,
+  Clock,
+  Building,
+} from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import * as api from '@/lib/api';
+
+/* ─────────────────────────────────────────────
+   Sub-components
+   ───────────────────────────────────────────── */
+
+/** Left panel — video with rounded inset card */
+function LoginImagePanel() {
+  return (
+    <div className="hr-login-image-panel">
+      <div className="hr-login-image-card">
+        <video
+          src="/hr_login_video.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Reusable input field */
+function InputField({
+  label,
+  icon: Icon,
+  id,
+  type = 'text',
+  value,
+  onChange,
+  placeholder,
+  required = true,
+  minLength,
+  endAdornment,
+  hint,
+}: {
+  label: string;
+  icon: React.ElementType;
+  id?: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  required?: boolean;
+  minLength?: number;
+  endAdornment?: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="hr-field">
+      <label className="hr-label" htmlFor={id}>{label}</label>
+      <div className="hr-input-wrapper">
+        <Icon className="hr-input-icon" />
+        <input
+          id={id}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="hr-input"
+          placeholder={placeholder}
+          required={required}
+          minLength={minLength}
+        />
+        {endAdornment}
+      </div>
+      {hint && <p className="hr-input-hint">{hint}</p>}
+    </div>
+  );
+}
+
+/** Status badge */
+function StatusBadge({ status }: { status: 'checking' | 'online' | 'offline' }) {
+  return (
+    <div className={`hr-status-badge hr-status-badge--${status}`}>
+      {status === 'online' ? (
+        <>
+          <Wifi className="hr-status-icon" />
+          <span>Server Connected</span>
+          <span className="hr-status-dot" />
+        </>
+      ) : status === 'offline' ? (
+        <>
+          <WifiOff className="hr-status-icon" />
+          <span>Server Offline</span>
+        </>
+      ) : (
+        <>
+          <div className="hr-status-spinner" />
+          <span>Connecting…</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Main page
+   ───────────────────────────────────────────── */
 
 export default function LoginPage() {
   const router = useRouter();
@@ -95,7 +212,6 @@ export default function LoginPage() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
-      // Check if it's a pending approval error
       if (errorMessage.toLowerCase().includes('pending')) {
         setIsPendingApproval(true);
       } else {
@@ -108,409 +224,662 @@ export default function LoginPage() {
   const toggleMode = () => {
     setIsRegistering(!isRegistering);
     setError('');
+    setIsPendingApproval(false);
   };
 
-  const features = [
-    { icon: <Zap className="h-5 w-5" />, text: 'AI-Powered Resume Screening' },
-    { icon: <BarChart3 className="h-5 w-5" />, text: 'Smart Candidate Ranking' },
-    { icon: <Shield className="h-5 w-5" />, text: 'Interview Analysis' },
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
-      {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        {/* Gradient Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-purple-600 to-pink-600"></div>
+    <>
+      <style jsx global>{`
+        /* ── Layout ───────────────────────────── */
+        .hr-login-page {
+          display: flex;
+          min-height: 100vh;
+          background: #ffffff;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
 
-        {/* Animated Orbs */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            animate={{
-              x: [0, 100, 0],
-              y: [0, -50, 0],
-            }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl"
-          />
-          <motion.div
-            animate={{
-              x: [0, -70, 0],
-              y: [0, 100, 0],
-            }}
-            transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-            className="absolute bottom-20 right-20 w-96 h-96 bg-purple-300/20 rounded-full blur-3xl"
-          />
-        </div>
+        /* ── Left Image Panel ─────────────────── */
+        .hr-login-image-panel {
+          display: none;
+          width: 50%;
+          padding: 12px;
+        }
+        @media (min-width: 1024px) {
+          .hr-login-image-panel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+        }
+        .hr-login-image-card {
+          position: relative;
+          width: 100%;
+          max-height: 100%;
+          aspect-ratio: 1600 / 1800;
+          border-radius: 20px;
+          overflow: hidden;
+        }
 
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:32px_32px]"></div>
+        /* ── Right Form Panel ─────────────────── */
+        .hr-form-panel {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 48px 32px;
+          position: relative;
+        }
+        .hr-form-container {
+          width: 100%;
+          max-width: 400px;
+        }
 
-        {/* Content */}
-        <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
+        /* ── Brand ────────────────────────────── */
+        .hr-brand {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-bottom: 40px;
+        }
+        .hr-brand-row {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+        }
+        .hr-brand-logo {
+          position: absolute;
+          right: 100%;
+          margin-right: 12px;
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          background: #111111;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .hr-brand-logo svg {
+          width: 22px;
+          height: 22px;
+          color: #ffffff;
+        }
+        .hr-brand-title {
+          font-size: 32px;
+          font-weight: 600;
+          color: #111111;
+          letter-spacing: -0.03em;
+          margin: 0;
+        }
+        .hr-brand-subtitle {
+          font-size: 16px;
+          font-weight: 400;
+          color: #888888;
+          margin-top: 6px;
+        }
+
+        /* ── Status Badge ─────────────────────── */
+        .hr-status-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 500;
+          margin-bottom: 32px;
+        }
+        .hr-status-badge--online {
+          background: #F0FDF4;
+          color: #16A34A;
+          border: 1px solid #BBF7D0;
+        }
+        .hr-status-badge--offline {
+          background: #FEF2F2;
+          color: #DC2626;
+          border: 1px solid #FECACA;
+        }
+        .hr-status-badge--checking {
+          background: #F9FAFB;
+          color: #6B7280;
+          border: 1px solid #E5E7EB;
+        }
+        .hr-status-icon {
+          width: 14px;
+          height: 14px;
+        }
+        .hr-status-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #16A34A;
+          animation: pulse-dot 2s ease-in-out infinite;
+        }
+        .hr-status-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid #D1D5DB;
+          border-top-color: #6B7280;
+          border-radius: 50%;
+          animation: spin 0.6s linear infinite;
+        }
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+
+        /* ── Heading ──────────────────────────── */
+        .hr-heading {
+          text-align: center;
+          margin-bottom: 32px;
+        }
+        .hr-heading h2 {
+          font-size: 24px;
+          font-weight: 600;
+          color: #111111;
+          letter-spacing: -0.02em;
+          margin: 0 0 6px 0;
+        }
+        .hr-heading p {
+          font-size: 15px;
+          color: #888888;
+          margin: 0;
+        }
+
+        /* ── Error ────────────────────────────── */
+        .hr-error {
+          padding: 12px 16px;
+          border-radius: 10px;
+          background: #FEF2F2;
+          border: 1px solid #FECACA;
+          color: #DC2626;
+          font-size: 14px;
+          margin-bottom: 24px;
+        }
+
+        /* ── Pending Approval ─────────────────── */
+        .hr-pending {
+          text-align: center;
+          padding: 32px 24px;
+          border-radius: 16px;
+          border: 1px solid #E5E5E5;
+          background: #FAFAFA;
+        }
+        .hr-pending-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: #FFFBEB;
+          border: 1px solid #FDE68A;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 16px;
+        }
+        .hr-pending-icon svg {
+          width: 28px;
+          height: 28px;
+          color: #D97706;
+        }
+        .hr-pending h3 {
+          font-size: 18px;
+          font-weight: 600;
+          color: #111111;
+          margin: 0 0 8px 0;
+        }
+        .hr-pending p {
+          font-size: 14px;
+          color: #888888;
+          margin: 0 0 24px 0;
+          line-height: 1.5;
+        }
+        .hr-pending button {
+          background: none;
+          border: none;
+          color: #111111;
+          font-weight: 500;
+          font-size: 14px;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        /* ── Form fields ──────────────────────── */
+        .hr-field {
+          margin-bottom: 20px;
+        }
+        .hr-label {
+          display: block;
+          font-size: 14px;
+          font-weight: 500;
+          color: #333333;
+          margin-bottom: 8px;
+        }
+        .hr-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+        .hr-input-icon {
+          position: absolute;
+          left: 14px;
+          width: 18px;
+          height: 18px;
+          color: #AAAAAA;
+          pointer-events: none;
+        }
+        .hr-input {
+          width: 100%;
+          padding: 14px 14px 14px 44px;
+          border: 1px solid #E5E5E5;
+          border-radius: 12px;
+          font-size: 15px;
+          color: #111111;
+          background: #FAFAFA;
+          outline: none;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+        .hr-input::placeholder {
+          color: #C0C0C0;
+        }
+        .hr-input:focus {
+          border-color: #111111;
+          background: #ffffff;
+          box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+        }
+        .hr-input-hint {
+          font-size: 12px;
+          color: #AAAAAA;
+          margin-top: 6px;
+        }
+
+        /* ── Password toggle ──────────────────── */
+        .hr-password-toggle {
+          position: absolute;
+          right: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 4px;
+          color: #AAAAAA;
+          transition: color 0.15s ease;
+        }
+        .hr-password-toggle:hover {
+          color: #666666;
+        }
+        .hr-password-toggle svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        /* ── Remember / Forgot ────────────────── */
+        .hr-options {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 24px;
+          margin-top: -4px;
+        }
+        .hr-remember {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          color: #555555;
+          cursor: pointer;
+        }
+        .hr-remember input[type="checkbox"] {
+          width: 16px;
+          height: 16px;
+          accent-color: #111111;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .hr-forgot {
+          font-size: 14px;
+          color: #555555;
+          text-decoration: none;
+          transition: color 0.15s ease;
+        }
+        .hr-forgot:hover {
+          color: #111111;
+        }
+
+        /* ── Submit Button ────────────────────── */
+        .hr-submit {
+          width: 100%;
+          padding: 14px 24px;
+          border-radius: 48px;
+          border: none;
+          background: #111111;
+          color: #ffffff;
+          font-size: 15px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+        }
+        .hr-submit:hover:not(:disabled) {
+          background: #222222;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+        .hr-submit:active:not(:disabled) {
+          transform: scale(0.99);
+        }
+        .hr-submit:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .hr-submit svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        /* ── Divider ──────────────────────────── */
+        .hr-divider {
+          position: relative;
+          margin: 24px 0;
+        }
+        .hr-divider-line {
+          width: 100%;
+          height: 1px;
+          background: #F0F0F0;
+        }
+        .hr-divider-text {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          padding: 0 16px;
+          background: #ffffff;
+          font-size: 13px;
+          color: #AAAAAA;
+        }
+
+        /* ── Switch mode link ─────────────────── */
+        .hr-switch {
+          text-align: center;
+          font-size: 14px;
+          color: #888888;
+        }
+        .hr-switch button {
+          background: none;
+          border: none;
+          color: #111111;
+          font-weight: 500;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+          transition: color 0.15s ease;
+        }
+        .hr-switch button:hover {
+          color: #000000;
+        }
+
+        /* ── Candidate Portal link ────────────── */
+        .hr-candidate-redirect {
+          text-align: center;
+          margin-top: 32px;
+          padding-top: 24px;
+          border-top: 1px solid #F0F0F0;
+          font-size: 14px;
+          color: #888888;
+        }
+        .hr-candidate-redirect a {
+          color: #111111;
+          font-weight: 500;
+          text-decoration: none;
+          transition: opacity 0.15s ease;
+        }
+        .hr-candidate-redirect a:hover {
+          opacity: 0.7;
+        }
+
+        /* ── Legal footer ─────────────────────── */
+        .hr-legal {
+          position: absolute;
+          bottom: 24px;
+          left: 0;
+          right: 0;
+          text-align: center;
+          font-size: 12px;
+          color: #BBBBBB;
+        }
+        .hr-legal a {
+          color: #888888;
+          text-decoration: none;
+          transition: color 0.15s ease;
+        }
+        .hr-legal a:hover {
+          color: #111111;
+        }
+
+        /* ── Loading spinner ──────────────────── */
+        .hr-spinner {
+          width: 20px;
+          height: 20px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #ffffff;
+          border-radius: 50%;
+          animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      <div className="hr-login-page">
+        {/* Left Panel — Image */}
+        <LoginImagePanel />
+
+        {/* Right Panel — Form */}
+        <div className="hr-form-panel">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="hr-form-container"
           >
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-3 mb-12">
-              <div className="w-14 h-14 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center">
-                <Brain className="h-8 w-8 text-white" />
+            {/* Brand */}
+            <div className="hr-brand">
+              <div className="hr-brand-row">
+                <div className="hr-brand-logo">
+                  <Brain />
+                </div>
+                <h1 className="hr-brand-title">HireQ</h1>
               </div>
-              <span className="text-3xl font-bold text-white">HireQ</span>
-            </Link>
+              <p className="hr-brand-subtitle">Recruiter Portal</p>
+            </div>
 
-            {/* Tagline */}
-            <h1 className="text-4xl xl:text-5xl font-bold text-white mb-6 leading-tight">
-              Hire Smarter,
-              <br />
-              <span className="text-white/80">Not Harder</span>
-            </h1>
-            <p className="text-xl text-white/70 mb-10 max-w-md">
-              Transform your recruitment with AI-powered candidate screening and intelligent matching.
-            </p>
+            {/* Status Badge */}
+            <div style={{ textAlign: 'center' }}>
+              <StatusBadge status={backendStatus} />
+            </div>
 
-            {/* Features */}
-            <div className="space-y-4">
-              {features.map((feature, index) => (
+            {/* Heading */}
+            <div className="hr-heading">
+              <h2>{isRegistering ? 'Create Account' : 'Welcome back'}</h2>
+              <p>
+                {isRegistering
+                  ? 'Set up your recruiter account'
+                  : 'Sign in to continue to HireQ'}
+              </p>
+            </div>
+
+            {/* Error */}
+            <AnimatePresence>
+              {error && (
                 <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 + index * 0.1 }}
-                  className="flex items-center gap-3 text-white/90"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="hr-error"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center">
-                    {feature.icon}
-                  </div>
-                  <span className="font-medium">{feature.text}</span>
+                  {error}
                 </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Right Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 relative">
-        {/* Background Elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-br from-cyan-500/5 to-primary-500/5 rounded-full blur-3xl"></div>
-        </div>
-
-        <div className="w-full max-w-md relative z-10">
-          {/* Mobile Logo */}
-          <div className="lg:hidden text-center mb-8">
-            <Link href="/" className="inline-flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <Brain className="h-7 w-7 text-white" />
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">HireQ</span>
-            </Link>
-          </div>
-
-          {/* Backend Status */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6"
-          >
-            <div className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium ${backendStatus === 'online'
-              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
-              : backendStatus === 'offline'
-                ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-              }`}>
-              {backendStatus === 'online' ? (
-                <>
-                  <Wifi className="h-4 w-4" />
-                  <span>Server Connected</span>
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                </>
-              ) : backendStatus === 'offline' ? (
-                <>
-                  <WifiOff className="h-4 w-4" />
-                  <span>Server Offline</span>
-                </>
-              ) : (
-                <>
-                  <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                  <span>Connecting...</span>
-                </>
               )}
+            </AnimatePresence>
+
+            {/* Pending Approval */}
+            {isPendingApproval ? (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="hr-pending"
+              >
+                <div className="hr-pending-icon">
+                  <Clock />
+                </div>
+                <h3>Account Pending Approval</h3>
+                <p>
+                  Your recruiter account is being reviewed by an administrator.
+                  You&apos;ll receive an email once approved.
+                </p>
+                <button
+                  onClick={() => {
+                    setIsPendingApproval(false);
+                    setIsRegistering(false);
+                  }}
+                >
+                  Back to Sign In
+                </button>
+              </motion.div>
+            ) : (
+              <>
+                {/* Form */}
+                <form onSubmit={handleSubmit}>
+                  <AnimatePresence mode="wait">
+                    {isRegistering && (
+                      <motion.div
+                        key="register-fields"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <InputField
+                          label="Full Name"
+                          icon={User}
+                          id="name"
+                          value={name}
+                          onChange={setName}
+                          placeholder="John Doe"
+                          required={isRegistering}
+                        />
+                        <InputField
+                          label="Company Name"
+                          icon={Building}
+                          id="company"
+                          value={company}
+                          onChange={setCompany}
+                          placeholder="Acme Corp"
+                          required={isRegistering}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <InputField
+                    label="Email Address"
+                    icon={Mail}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={setEmail}
+                    placeholder="you@example.com"
+                  />
+
+                  <InputField
+                    label="Password"
+                    icon={Lock}
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={setPassword}
+                    placeholder="••••••••"
+                    minLength={6}
+                    hint={isRegistering ? 'Minimum 6 characters' : undefined}
+                    endAdornment={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="hr-password-toggle"
+                      >
+                        {showPassword ? <EyeOff /> : <Eye />}
+                      </button>
+                    }
+                  />
+
+                  {/* Remember me / Forgot password */}
+                  {!isRegistering && (
+                    <div className="hr-options">
+                      <label className="hr-remember">
+                        <input type="checkbox" />
+                        Remember me
+                      </label>
+                      <a href="#" className="hr-forgot">
+                        Forgot password?
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Submit */}
+                  <motion.button
+                    type="submit"
+                    disabled={isLoading || backendStatus !== 'online'}
+                    className="hr-submit"
+                    whileHover={{ scale: isLoading ? 1 : 1.01 }}
+                    whileTap={{ scale: isLoading ? 1 : 0.99 }}
+                  >
+                    {isLoading ? (
+                      <div className="hr-spinner" />
+                    ) : (
+                      <>
+                        <span>{isRegistering ? 'Create Account' : 'Sign In'}</span>
+                        <ArrowRight />
+                      </>
+                    )}
+                  </motion.button>
+                </form>
+
+                {/* Divider + Toggle */}
+                <div className="hr-divider">
+                  <div className="hr-divider-line" />
+                  <span className="hr-divider-text">or</span>
+                </div>
+
+                <div className="hr-switch">
+                  {isRegistering ? 'Already have an account?' : "Don\u2019t have an account?"}{' '}
+                  <button onClick={toggleMode}>
+                    {isRegistering ? 'Sign In' : 'Create one'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Candidate Portal redirect */}
+            <div className="hr-candidate-redirect">
+              Looking for a job?{' '}
+              <Link href="/candidate/login">Go to Candidate Portal →</Link>
             </div>
           </motion.div>
 
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-8"
-          >
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              {isRegistering ? 'Create Account' : 'Welcome Back'}
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              {isRegistering
-                ? 'Start your journey with HireQ'
-                : 'Sign in to continue to HireQ'
-              }
-            </p>
-          </motion.div>
-
-          {/* Pending Approval Message */}
-          {isPendingApproval && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-800 p-8 text-center"
-            >
-              <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Clock className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Account Pending Approval
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Your recruiter account is being reviewed by an administrator.
-                You&apos;ll receive an email once your account is approved.
-              </p>
-              <button
-                onClick={() => {
-                  setIsPendingApproval(false);
-                  setIsRegistering(false);
-                }}
-                className="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium"
-              >
-                Back to Sign In
-              </button>
-            </motion.div>
-          )}
-
-          {/* Form Card */}
-          {!isPendingApproval && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-800 p-8"
-            >
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Error Message */}
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3"
-                  >
-                    <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                  </motion.div>
-                )}
-
-
-                {/* Name Field (Registration only) */}
-                {isRegistering && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    <label htmlFor="name" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Full Name
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        id="name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="John Doe"
-                        className="w-full pl-12 pr-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
-                        required={isRegistering}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Company Name Field (Registration only) */}
-                {isRegistering && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    <label htmlFor="company" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Company Name
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Building className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        id="company"
-                        value={company}
-                        onChange={(e) => setCompany(e.target.value)}
-                        placeholder="Acme Corp"
-                        className="w-full pl-12 pr-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
-                        required={isRegistering}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Email Field */}
-                <div>
-                  <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="email"
-                      id="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full pl-12 pr-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password Field */}
-                <div>
-                  <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      id="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      minLength={6}
-                      className="w-full pl-12 pr-12 py-3.5 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                  {isRegistering && (
-                    <p className="text-xs text-gray-500 mt-2">Minimum 6 characters</p>
-                  )}
-                </div>
-
-                {/* Remember Me / Forgot Password */}
-                {!isRegistering && (
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
-                      />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Remember me</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <motion.button
-                  type="submit"
-                  disabled={isLoading || backendStatus !== 'online'}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  className="w-full group py-4 bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{isRegistering ? 'Creating Account...' : 'Signing in...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{isRegistering ? 'Create Account' : 'Sign In'}</span>
-                      <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </motion.button>
-              </form>
-
-              {/* Divider */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white dark:bg-gray-900 text-gray-500">or</span>
-                </div>
-              </div>
-
-              {/* Toggle Login/Register */}
-              <p className="text-center text-gray-600 dark:text-gray-400">
-                {isRegistering ? 'Already have an account?' : "Don't have an account?"}{' '}
-                <button
-                  type="button"
-                  onClick={toggleMode}
-                  className="font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
-                >
-                  {isRegistering ? 'Sign In' : 'Create one'}
-                </button>
-              </p>
-            </motion.div>
-          )}
-
-          {/* Candidate Portal Link */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-6 p-4 bg-gradient-to-r from-candidate-50 to-cyan-50 dark:from-candidate-900/20 dark:to-cyan-900/20 border border-candidate-200 dark:border-candidate-800 rounded-2xl"
-          >
-            <p className="text-center text-gray-700 dark:text-gray-300 text-sm">
-              Looking for a job?{' '}
-              <Link
-                href="/candidate/login"
-                className="font-semibold text-candidate-600 hover:text-candidate-700 dark:text-candidate-400 dark:hover:text-candidate-300 transition-colors inline-flex items-center gap-1"
-              >
-                Go to Candidate Portal
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </p>
-          </motion.div>
-
-          {/* Terms */}
-          <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-6">
+          {/* Legal Footer */}
+          <div className="hr-legal">
             By continuing, you agree to our{' '}
-            <a href="#" className="text-primary-600 hover:underline">Terms of Service</a>
+            <a href="#">Terms of Service</a>
             {' '}and{' '}
-            <a href="#" className="text-primary-600 hover:underline">Privacy Policy</a>
-          </p>
+            <a href="#">Privacy Policy</a>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
