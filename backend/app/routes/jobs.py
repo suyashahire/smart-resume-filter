@@ -4,7 +4,8 @@ Job Description routes for creating and managing job postings.
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 
 from app.config import settings
 from app.models.user import User, UserRole
@@ -18,15 +19,46 @@ from app.models.application import Application, ApplicationStatus, StatusChange,
 from app.models.notification import Notification, NotificationType
 from app.models.message import DirectMessage, DirectConversation
 from app.routes.auth import get_current_user
+from beanie import PydanticObjectId
 from app.services.job_parser import JobParserService
 from app.services.matching import get_matching_service
 from app.services.websocket_manager import get_connection_manager, EventType
 
-router = APIRouter()
+def _to_object_ids(str_ids: list) -> list:
+    """Convert a list of string IDs to PydanticObjectId, skipping invalid ones."""
+    ids = []
+    for sid in str_ids:
+        try:
+            ids.append(PydanticObjectId(sid))
+        except Exception:
+            pass
+    return ids
 
-# Use singleton instances for model reuse (pre-loaded at startup)
+router = APIRouter()
+logger = logging.getLogger(__name__)
 job_parser = JobParserService()
 matching_service = get_matching_service()
+
+
+def _job_to_response(job: JobDescription) -> JobDescriptionResponse:
+    """Convert a JobDescription document to its API response."""
+    return JobDescriptionResponse(
+        id=str(job.id),
+        title=job.title,
+        description=job.description,
+        required_skills=job.required_skills,
+        preferred_skills=job.preferred_skills,
+        experience_required=job.experience_required,
+        education_required=job.education_required,
+        location=job.location,
+        salary_range=job.salary_range,
+        job_type=job.job_type,
+        is_active=job.is_active,
+        candidates_screened=job.candidates_screened,
+        company=job.company,
+        application_mode=job.application_mode,
+        created_at=job.created_at,
+    )
 
 
 @router.post("/", response_model=JobDescriptionResponse, status_code=status.HTTP_201_CREATED)
@@ -40,7 +72,6 @@ async def create_job_description(
     The system will automatically extract required skills from the description.
     """
     # Extract skills from description
-    extracted_skills = await job_parser.extract_skills(job_data.description)
     extracted_skills = await job_parser.extract_skills(job_data.description)
     
     # Create job description
@@ -73,23 +104,7 @@ async def create_job_description(
         user_id=str(current_user.id)
     )
     
-    return JobDescriptionResponse(
-        id=str(job.id),
-        title=job.title,
-        description=job.description,
-        required_skills=job.required_skills,
-        preferred_skills=job.preferred_skills,
-        experience_required=job.experience_required,
-        education_required=job.education_required,
-        location=job.location,
-        salary_range=job.salary_range,
-        job_type=job.job_type,
-        is_active=job.is_active,
-        candidates_screened=job.candidates_screened,
-        company=job.company,
-        application_mode=job.application_mode,
-        created_at=job.created_at
-    )
+    return _job_to_response(job)
 
 
 @router.get("/", response_model=List[JobDescriptionResponse])
@@ -100,8 +115,6 @@ async def list_job_descriptions(
     current_user: User = Depends(get_current_user)
 ):
     """List all job descriptions created by the current user."""
-    query = Resume.user_id == str(current_user.id)
-    
     if active_only:
         jobs = await JobDescription.find(
             JobDescription.user_id == str(current_user.id),
@@ -113,23 +126,7 @@ async def list_job_descriptions(
         ).skip(skip).limit(limit).sort(-JobDescription.created_at).to_list()
     
     return [
-        JobDescriptionResponse(
-            id=str(job.id),
-            title=job.title,
-            description=job.description,
-            required_skills=job.required_skills,
-            preferred_skills=job.preferred_skills,
-            experience_required=job.experience_required,
-            education_required=job.education_required,
-            location=job.location,
-            salary_range=job.salary_range,
-            job_type=job.job_type,
-            is_active=job.is_active,
-            candidates_screened=job.candidates_screened,
-            company=job.company,
-            application_mode=job.application_mode,
-            created_at=job.created_at
-        )
+        _job_to_response(job)
         for job in jobs
     ]
 
@@ -154,23 +151,7 @@ async def get_job_description(
             detail="Not authorized to access this job description"
         )
     
-    return JobDescriptionResponse(
-        id=str(job.id),
-        title=job.title,
-        description=job.description,
-        required_skills=job.required_skills,
-        preferred_skills=job.preferred_skills,
-        experience_required=job.experience_required,
-        education_required=job.education_required,
-        location=job.location,
-        salary_range=job.salary_range,
-        job_type=job.job_type,
-        is_active=job.is_active,
-        candidates_screened=job.candidates_screened,
-        company=job.company,
-        application_mode=job.application_mode,
-        created_at=job.created_at
-    )
+    return _job_to_response(job)
 
 
 @router.put("/{job_id}", response_model=JobDescriptionResponse)
@@ -204,26 +185,10 @@ async def update_job_description(
     if job_update.description:
         job.required_skills = await job_parser.extract_skills(job_update.description)
     
-    job.updated_at = datetime.utcnow()
+    job.updated_at = datetime.now(timezone.utc)
     await job.save()
     
-    return JobDescriptionResponse(
-        id=str(job.id),
-        title=job.title,
-        description=job.description,
-        required_skills=job.required_skills,
-        preferred_skills=job.preferred_skills,
-        experience_required=job.experience_required,
-        education_required=job.education_required,
-        location=job.location,
-        salary_range=job.salary_range,
-        job_type=job.job_type,
-        is_active=job.is_active,
-        candidates_screened=job.candidates_screened,
-        company=job.company,
-        application_mode=job.application_mode,
-        created_at=job.created_at
-    )
+    return _job_to_response(job)
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -353,9 +318,11 @@ async def screen_candidates(
             )
             await screening_result.insert()
     
-    # Update job stats
-    job.candidates_screened = len(results)
-    job.updated_at = datetime.utcnow()
+    # Update job stats — use total screening results count, not just this batch
+    job.candidates_screened = await ScreeningResult.find(
+        ScreeningResult.job_id == str(job.id)
+    ).count()
+    job.updated_at = datetime.now(timezone.utc)
     await job.save()
     
     # Broadcast screening completed event
@@ -416,9 +383,25 @@ async def get_screening_results(
         ScreeningResult.job_id == job_id
     ).sort(-ScreeningResult.overall_score).to_list()
     
+    # Batch-fetch all resumes to avoid N+1
+    resume_ids = list({sr.resume_id for sr in screening_results if sr.resume_id})
+    if resume_ids:
+        resumes_list = await Resume.find({"_id": {"$in": _to_object_ids(resume_ids)}}).to_list()
+        resume_map = {str(r.id): r for r in resumes_list}
+    else:
+        resume_map = {}
+    
+    # Batch-fetch all resume owners
+    owner_ids = list({r.user_id for r in resume_map.values() if r.user_id})
+    if owner_ids:
+        owners_list = await User.find({"_id": {"$in": _to_object_ids(owner_ids)}}).to_list()
+        owner_map = {str(u.id): u for u in owners_list}
+    else:
+        owner_map = {}
+    
     results = []
     for sr in screening_results:
-        resume = await Resume.get(sr.resume_id)
+        resume = resume_map.get(sr.resume_id)
         if resume:
             # Determine source: check if there's an application linked
             source = "hr_upload"
@@ -430,13 +413,10 @@ async def get_screening_results(
             
             # Check if the resume's uploader is a candidate (portal user)
             if resume.user_id:
-                try:
-                    resume_owner = await User.get(resume.user_id)
-                    if resume_owner and resume_owner.role == UserRole.CANDIDATE:
-                        candidate_user_id = resume.user_id
-                        source = "candidate_portal"
-                except Exception:
-                    pass
+                resume_owner = owner_map.get(resume.user_id)
+                if resume_owner and resume_owner.role == UserRole.CANDIDATE:
+                    candidate_user_id = resume.user_id
+                    source = "candidate_portal"
             
             results.append(ResumeWithScore(
                 id=str(resume.id),
@@ -488,19 +468,35 @@ async def get_pending_applications(
         "status": ApplicationStatus.PENDING_APPROVAL.value
     }).to_list()
     
+    # Batch-fetch all resumes and candidates to avoid N+1
+    app_resume_ids = list({app.resume_id for app in applications if app.resume_id})
+    app_candidate_ids = list({app.candidate_id for app in applications if app.candidate_id})
+    
+    if app_resume_ids:
+        resumes_list = await Resume.find({"_id": {"$in": _to_object_ids(app_resume_ids)}}).to_list()
+        resume_map = {str(r.id): r for r in resumes_list}
+    else:
+        resume_map = {}
+    
+    if app_candidate_ids:
+        candidates_list = await User.find({"_id": {"$in": _to_object_ids(app_candidate_ids)}}).to_list()
+        candidate_map = {str(c.id): c for c in candidates_list}
+    else:
+        candidate_map = {}
+    
     results = []
     for app in applications:
         resume = None
         candidate_name = "Unknown"
         
         if app.resume_id:
-            resume = await Resume.get(app.resume_id)
+            resume = resume_map.get(app.resume_id)
             if resume and resume.parsed_data:
                 candidate_name = resume.parsed_data.name or resume.parsed_data.email or "Unknown"
         
         # Get candidate user info if no resume name
-        if candidate_name == "Unknown":
-            candidate = await User.get(app.candidate_id)
+        if candidate_name == "Unknown" and app.candidate_id:
+            candidate = candidate_map.get(app.candidate_id)
             if candidate:
                 candidate_name = candidate.name or candidate.email
         
@@ -539,9 +535,27 @@ async def approve_application(
     
     # Check if already processed
     if application.status != ApplicationStatus.PENDING_APPROVAL:
+        # If already processed, silently clean up the notification and return success
+        # This prevents the "already approved" error when notification persists
+        status_val = application.status.value if hasattr(application.status, 'value') else str(application.status)
+        if status_val in ('applied', 'screening', 'interview', 'offer', 'hired'):
+            # Already approved — delete any lingering approval notification
+            try:
+                await Notification.find({
+                    "application_id": str(application.id),
+                    "type": NotificationType.APPLICATION_APPROVAL_REQUIRED.value,
+                }).delete()
+            except Exception:
+                pass
+            return {
+                "message": "Application was already approved",
+                "application_id": str(application.id),
+                "screening_result_id": application.screening_result_id,
+                "score": None
+            }
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Application is not pending approval (current status: {application.status})"
+            detail=f"Application is not pending approval (current status: {status_val})"
         )
     
     # Get the job
@@ -562,13 +576,13 @@ async def approve_application(
     # Update application
     application.status = ApplicationStatus.APPLIED
     application.is_approved_for_screening = True
-    application.approval_decision_at = datetime.utcnow()
+    application.approval_decision_at = datetime.now(timezone.utc)
     application.approval_decision_by = str(current_user.id)
     application.status_history.append(
         StatusChange(
             from_status=ApplicationStatus.PENDING_APPROVAL.value,
             to_status=ApplicationStatus.APPLIED.value,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=str(current_user.id),
             note="Application approved by HR"
         )
@@ -624,7 +638,7 @@ async def approve_application(
                         StatusChange(
                             from_status=ApplicationStatus.APPLIED.value,
                             to_status=ApplicationStatus.SCREENING.value,
-                            changed_at=datetime.utcnow(),
+                            changed_at=datetime.now(timezone.utc),
                             note=f"Auto-screened with score: {result['score']:.1f}"
                         )
                     )
@@ -640,8 +654,16 @@ async def approve_application(
     
     await application.save()
     
-    # Notify candidate (optional - can be enabled later)
-    # For now, just broadcast to HR
+    # Clean up the approval notification since it's now processed
+    try:
+        await Notification.find({
+            "application_id": str(application.id),
+            "type": NotificationType.APPLICATION_APPROVAL_REQUIRED.value,
+        }).delete()
+    except Exception:
+        pass
+    
+    # Broadcast to HR
     ws_manager = get_connection_manager()
     await ws_manager.broadcast_event(
         EventType.CANDIDATE_SCORED,
@@ -684,9 +706,22 @@ async def reject_application(
     
     # Check if already processed
     if application.status != ApplicationStatus.PENDING_APPROVAL:
+        status_val = application.status.value if hasattr(application.status, 'value') else str(application.status)
+        if status_val == 'rejected':
+            try:
+                await Notification.find({
+                    "application_id": str(application.id),
+                    "type": NotificationType.APPLICATION_APPROVAL_REQUIRED.value,
+                }).delete()
+            except Exception:
+                pass
+            return {
+                "message": "Application was already rejected",
+                "application_id": str(application.id),
+            }
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Application is not pending approval (current status: {application.status})"
+            detail=f"Application is not pending approval (current status: {status_val})"
         )
     
     # Get the job
@@ -707,13 +742,13 @@ async def reject_application(
     # Update application
     application.status = ApplicationStatus.REJECTED
     application.is_approved_for_screening = False
-    application.approval_decision_at = datetime.utcnow()
+    application.approval_decision_at = datetime.now(timezone.utc)
     application.approval_decision_by = str(current_user.id)
     application.status_history.append(
         StatusChange(
             from_status=ApplicationStatus.PENDING_APPROVAL.value,
             to_status=ApplicationStatus.REJECTED.value,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=str(current_user.id),
             note=reason or "Application rejected by HR"
         )
@@ -737,6 +772,15 @@ async def reject_application(
             await notification.insert()
     except Exception as e:
         print(f"\u26a0\ufe0f Failed to notify candidate of rejection: {e}")
+    
+    # Clean up the approval notification since it's now processed
+    try:
+        await Notification.find({
+            "application_id": str(application.id),
+            "type": NotificationType.APPLICATION_APPROVAL_REQUIRED.value,
+        }).delete()
+    except Exception:
+        pass
     
     return {
         "message": "Application rejected",
@@ -781,12 +825,12 @@ async def update_application_status(
 
     # Update application status + history
     application.status = new_status
-    application.updated_at = datetime.utcnow()
+    application.updated_at = datetime.now(timezone.utc)
     application.status_history.append(
         StatusChange(
             from_status=old_status.value,
             to_status=new_status.value,
-            changed_at=datetime.utcnow(),
+            changed_at=datetime.now(timezone.utc),
             changed_by=str(current_user.id),
             note=body.note,
         )
@@ -801,7 +845,7 @@ async def update_application_status(
                 sr.application_status = new_status.value
                 await sr.save()
     except Exception:
-        pass
+        logger.exception("Failed to sync screening result status for app %s", application_id)
 
     # ---- Candidate notification + messaging ----
     candidate_id = application.candidate_id
@@ -970,7 +1014,7 @@ async def get_applications_by_status(
                 if candidate:
                     candidate_name = candidate.name
             except Exception:
-                pass
+                logger.warning("Failed to fetch candidate name for %s", app.candidate_id)
 
         results.append({
             "id": str(app.id),

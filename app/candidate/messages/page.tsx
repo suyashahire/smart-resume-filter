@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
-import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+import { useRealtimeUpdates, RealtimeEvent } from '@/hooks/useRealtimeUpdates';
 import * as api from '@/lib/api';
 import { MessagesSkeleton } from '@/components/ui/Skeleton';
 import type { ChatConversation } from '@/store/useStore';
@@ -42,9 +42,9 @@ export default function CandidateMessagesPage() {
   useRealtimeUpdates({
     userId: user?.id,
     enabled: !!user?.id,
-    onEvent: useCallback((event: any) => {
+    onEvent: useCallback((event: RealtimeEvent) => {
       if (event.type === 'new_message') {
-        const data = event.data as any;
+        const data = event.data;
         const currentConv = selectedConversationRef.current;
         if (currentConv && data.conversation_id === currentConv.id) {
           api.getConversationMessages(currentConv.id).then(res => {
@@ -59,7 +59,7 @@ export default function CandidateMessagesPage() {
 
       // Typing indicator events
       if (event.type === 'typing_started' || event.type === 'typing_stopped') {
-        const data = event.data as any;
+        const data = event.data;
         const currentConv = selectedConversationRef.current;
         if (currentConv && data.conversation_id === currentConv.id) {
           setShowTypingIndicator(event.type === 'typing_started');
@@ -68,7 +68,7 @@ export default function CandidateMessagesPage() {
 
       // Read receipts — update check marks in real-time
       if (event.type === 'messages_read') {
-        const data = event.data as any;
+        const data = event.data;
         const currentConv = selectedConversationRef.current;
         if (currentConv && data.conversation_id === currentConv.id) {
           api.getConversationMessages(currentConv.id).then(res => {
@@ -182,13 +182,13 @@ export default function CandidateMessagesPage() {
 
   const filteredConversations = conversations.filter((c) => {
     const matchesSearch =
-      (c.other_user?.name ?? (c as any).hr_user_name ?? '')
+      (c.other_user?.name ?? c.hr_user_name ?? '')
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
       (c.job_title ?? '')
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
-      ((c as any).company ?? '')
+      (c.company ?? '')
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
 

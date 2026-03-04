@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Search, Briefcase, SlidersHorizontal } from 'lucide-react';
-import { getOpenJobs, getCandidateApplications, getSavedJobs, saveJob, unsaveJob } from '@/lib/api';
+import { getOpenJobs, getCandidateApplications, getSavedJobs, saveJob, unsaveJob, type JobDescriptionResponse } from '@/lib/api';
 import {
   SearchBar,
   FilterSidebar,
@@ -16,11 +16,17 @@ import {
 
 
 function applyFilters(
-  jobs: any[],
+  jobs: JobDescriptionResponse[],
   searchTerm: string,
-  filters: JobFilters
-): any[] {
+  filters: JobFilters,
+  savedJobIds?: Set<string>
+): JobDescriptionResponse[] {
   let result = [...jobs];
+
+  // Saved-only filter
+  if (filters.savedOnly && savedJobIds) {
+    result = result.filter((job) => savedJobIds.has(job.id));
+  }
 
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase();
@@ -80,6 +86,7 @@ export default function CandidateJobsPage() {
     experience: '',
     workMode: 'all',
     salaryRange: '',
+    savedOnly: false,
   });
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
@@ -117,8 +124,8 @@ export default function CandidateJobsPage() {
   }, [fetchJobsAndApplications]);
 
   const filteredJobs = useMemo(
-    () => applyFilters(jobs, searchTerm, filters),
-    [jobs, searchTerm, filters]
+    () => applyFilters(jobs, searchTerm, filters, savedJobIds),
+    [jobs, searchTerm, filters, savedJobIds]
   );
 
   const handleToggleSave = useCallback(async (jobId: string) => {
@@ -150,7 +157,8 @@ export default function CandidateJobsPage() {
     !!filters.location ||
     !!filters.experience ||
     filters.workMode !== 'all' ||
-    !!filters.salaryRange;
+    !!filters.salaryRange ||
+    !!filters.savedOnly;
 
   const clearFilters = () => {
     setFilters({
@@ -159,6 +167,7 @@ export default function CandidateJobsPage() {
       experience: '',
       workMode: 'all',
       salaryRange: '',
+      savedOnly: false,
     });
     setSearchTerm('');
   };
@@ -267,6 +276,7 @@ export default function CandidateJobsPage() {
                       salaryOptions={salaryOptions}
                       hasActiveFilters={hasActiveFilters}
                       onClearFilters={clearFilters}
+                      savedCount={savedJobIds.size}
                     />
                   </motion.div>
                 )}
@@ -316,6 +326,7 @@ export default function CandidateJobsPage() {
                 salaryOptions={salaryOptions}
                 hasActiveFilters={hasActiveFilters}
                 onClearFilters={clearFilters}
+                savedCount={savedJobIds.size}
               />
             </div>
           </aside>

@@ -17,7 +17,9 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  Trash2
+  Trash2,
+  Power,
+  AlertTriangle
 } from 'lucide-react';
 import * as api from '@/lib/api';
 
@@ -49,6 +51,10 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionsMenuUser, setActionsMenuUser] = useState<string | null>(null);
+  const [detailUser, setDetailUser] = useState<User | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -125,6 +131,51 @@ export default function AdminUsersPage() {
   const openRejectModal = (user: User) => {
     setSelectedUser(user);
     setShowRejectModal(true);
+  };
+
+  const handleToggleActive = async (userId: string) => {
+    try {
+      setActionsMenuUser(null);
+      const result = await api.toggleUserActive(userId);
+      setSuccess(result.message || 'User status updated');
+      fetchUsers();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle user status');
+    }
+  };
+
+  const openDeleteModal = (user: User) => {
+    setSelectedUser(user);
+    setShowDeleteModal(true);
+    setActionsMenuUser(null);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    try {
+      await api.deleteUser(selectedUser.id);
+      setSuccess('User deleted successfully');
+      setShowDeleteModal(false);
+      setSelectedUser(null);
+      fetchUsers();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete user');
+    }
+  };
+
+  const handleViewDetail = async (user: User) => {
+    setActionsMenuUser(null);
+    try {
+      const detail = await api.getUserDetail(user.id);
+      setDetailUser({ ...user, ...detail } as User);
+      setShowDetailModal(true);
+    } catch {
+      // Fallback to locally-available info
+      setDetailUser(user);
+      setShowDetailModal(true);
+    }
   };
 
   const getRoleColor = (role: string) => {
@@ -381,12 +432,54 @@ export default function AdminUsersPage() {
                           </>
                         )}
                         {user.role !== 'admin' && (
-                          <button
-                            className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                            title="More options"
-                          >
-                            <MoreVertical className="h-5 w-5" />
-                          </button>
+                          <div className="relative">
+                            <button
+                              onClick={() => setActionsMenuUser(actionsMenuUser === user.id ? null : user.id)}
+                              className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                              title="More options"
+                            >
+                              <MoreVertical className="h-5 w-5" />
+                            </button>
+                            <AnimatePresence>
+                              {actionsMenuUser === user.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setActionsMenuUser(null)}
+                                  />
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                                    transition={{ duration: 0.12 }}
+                                    className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-20 overflow-hidden"
+                                  >
+                                    <button
+                                      onClick={() => handleViewDetail(user)}
+                                      className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                    >
+                                      <Users className="h-4 w-4" />
+                                      View Details
+                                    </button>
+                                    <button
+                                      onClick={() => handleToggleActive(user.id)}
+                                      className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                    >
+                                      <Power className="h-4 w-4" />
+                                      {user.is_active ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                    <button
+                                      onClick={() => openDeleteModal(user)}
+                                      className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-2.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Delete User
+                                    </button>
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -465,6 +558,142 @@ export default function AdminUsersPage() {
                   className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors"
                 >
                   Reject User
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteModal && selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Delete User
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {selectedUser.name}
+                  </p>
+                </div>
+              </div>
+              
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Are you sure you want to permanently delete this user? This action cannot be undone. All associated data will be removed.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowDeleteModal(false); setSelectedUser(null); }}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors"
+                >
+                  Delete Permanently
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* User Detail Modal */}
+      <AnimatePresence>
+        {showDetailModal && detailUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDetailModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                  detailUser.role === 'admin'
+                    ? 'bg-gradient-to-br from-purple-500 to-gray-700'
+                    : detailUser.role === 'candidate'
+                    ? 'bg-gradient-to-br from-green-500 to-cyan-500'
+                    : 'bg-gradient-to-br from-blue-500 to-purple-600'
+                }`}>
+                  <span className="text-white font-bold text-lg">
+                    {detailUser.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {detailUser.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{detailUser.email}</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Role</p>
+                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getRoleColor(detailUser.role)}`}>
+                      {formatRole(detailUser.role)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Status</p>
+                    {getStatusBadge(detailUser.account_status)}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Active</p>
+                    <span className={`text-sm font-medium ${detailUser.is_active ? 'text-green-600' : 'text-red-600'}`}>
+                      {detailUser.is_active ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Created</p>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{formatDate(detailUser.created_at)}</span>
+                  </div>
+                </div>
+                
+                {detailUser.rejection_reason && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase mb-1">Rejection Reason</p>
+                    <p className="text-sm text-red-700 dark:text-red-300">{detailUser.rejection_reason}</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowDetailModal(false)}
+                  className="px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Close
                 </button>
               </div>
             </motion.div>

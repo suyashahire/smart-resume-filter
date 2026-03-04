@@ -2,14 +2,19 @@
 WebSocket routes for real-time updates.
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+import logging
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
 from typing import Optional
-import jwt
+from jose import jwt, JWTError
 
 from app.services.websocket_manager import get_connection_manager, EventType
 from app.config import settings
+from app.models.user import User
+from app.routes.auth import get_current_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def verify_websocket_token(token: Optional[str]) -> Optional[str]:
@@ -27,25 +32,23 @@ async def verify_websocket_token(token: Optional[str]) -> Optional[str]:
             algorithms=[settings.JWT_ALGORITHM]
         )
         return payload.get("sub")  # user_id from token
-    except jwt.PyJWTError:
+    except JWTError:
         return None
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    user_id: Optional[str] = Query(default="anonymous"),
     token: Optional[str] = Query(default=None)
 ):
     """
     WebSocket endpoint for real-time updates.
     
-    Connect via: ws://localhost:8000/api/realtime/ws?user_id=<user_id>&token=<jwt_token>
+    Connect via: ws://localhost:8000/api/realtime/ws?token=<jwt_token>
     
     Authentication:
-    - If token is provided, it will be verified and user_id extracted
-    - If no token, user_id parameter is used (for backward compatibility)
-    - In production, always use token for security
+    - A valid JWT token is REQUIRED
+    - Connections without a valid token are rejected with code 4001
     
     Events sent to clients:
     - resume_uploaded: New resume uploaded
@@ -59,11 +62,13 @@ async def websocket_endpoint(
     """
     manager = get_connection_manager()
     
-    # Verify token if provided
+    # Verify token — reject unauthenticated connections
     authenticated_user_id = await verify_websocket_token(token)
-    final_user_id = authenticated_user_id or user_id or "anonymous"
+    if not authenticated_user_id:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
     
-    await manager.connect(websocket, final_user_id)
+    await manager.connect(websocket, authenticated_user_id)
     
     try:
         while True:
@@ -74,18 +79,16 @@ async def websocket_endpoint(
             if data == "ping":
                 await websocket.send_text("pong")
             
-            # Could handle other client-to-server messages here if needed
-            
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.exception("WebSocket error for user %s", authenticated_user_id)
         manager.disconnect(websocket)
 
 
 @router.get("/connections")
-async def get_connection_stats():
-    """Get current WebSocket connection statistics."""
+async def get_connection_stats(current_user: User = Depends(get_current_user)):
+    """Get current WebSocket connection statistics (authenticated)."""
     manager = get_connection_manager()
     
     return {

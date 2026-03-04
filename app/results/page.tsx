@@ -6,9 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Trophy, Mail, Phone, FileText, MessageSquare, AlertCircle, CheckCircle, Trash2, ArrowRight, Crown, Star, Users, TrendingUp, Search, X, Filter, SlidersHorizontal, Square, CheckSquare, Loader2, Download, GitCompare, Briefcase, GraduationCap, Award, BarChart3, Heart, Sparkles, Eye, ChevronRight, Zap, Target, Shield, FolderPlus, Tags, Plus, RefreshCw, StickyNote, Tag, ChevronDown, UserCheck, Clock, Send, XCircle, CircleDot, HelpCircle, Copy, Lightbulb, LayoutGrid, GripVertical } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import { useStore, Job, CandidateJobAssignment } from '@/store/useStore';
+import { useStore, Job, CandidateJobAssignment, type Resume } from '@/store/useStore';
 import * as api from '@/lib/api';
 import RealtimeIndicator from '@/components/features/RealtimeIndicator';
+import PendingApplicationsBanner from '@/components/features/PendingApplicationsBanner';
 import { ResultsSkeleton } from '@/components/ui/Skeleton';
 
 function ResultsContent() {
@@ -245,11 +246,11 @@ function ResultsContent() {
     try {
       // Fetch jobs + uploaded resumes in parallel
       const [jobsData, uploadedResumes] = await Promise.all([
-        api.getJobDescriptions().catch(() => [] as any[]),
+        api.getJobDescriptions().catch(() => [] as api.JobDescriptionResponse[]),
         api.getResumes().catch(() => [] as api.ResumeResponse[]),
       ]);
       
-      const allScreenedResumes: any[] = [];
+      const allScreenedResumes: Resume[] = [];
       
       // Fetch screening results for each job
       if (jobsData && jobsData.length > 0) {
@@ -257,7 +258,7 @@ function ResultsContent() {
           try {
             const screeningResults = await api.getScreeningResults(job.id);
             if (screeningResults && screeningResults.length > 0) {
-              const resultsWithJob = screeningResults.map((r: any) => ({
+              const resultsWithJob = screeningResults.map((r: api.ResumeWithScore) => ({
                 id: r.id,
                 name: r.name || 'Unknown',
                 email: r.email || '',
@@ -271,7 +272,7 @@ function ResultsContent() {
                 jobTitle: job.title,
                 source: r.source || 'hr_upload',
                 applicationId: r.application_id,
-                candidateUserId: r.candidate_user_id || null,
+                candidateUserId: r.candidate_user_id || undefined,
               }));
               allScreenedResumes.push(...resultsWithJob);
             }
@@ -325,7 +326,7 @@ function ResultsContent() {
         setResumes(dedupedResumes);
         
         // Auto-create candidateJobAssignments for screened candidates
-        dedupedResumes.forEach((r: any) => {
+        dedupedResumes.forEach((r) => {
           if (r.jobId) {
             const existing = candidateJobAssignmentsRef.current.some(
               a => a.candidateId === r.id && a.jobId === r.jobId
@@ -387,8 +388,8 @@ function ResultsContent() {
 
   // Memoize stats BEFORE any early returns (Rules of Hooks)
   const stats = useMemo(() => {
-    const unscreenedCount = filteredResumes.filter(r => (r as any).isUnscreened).length;
-    const screenedResumes = filteredResumes.filter(r => !(r as any).isUnscreened);
+    const unscreenedCount = filteredResumes.filter(r => r.isUnscreened).length;
+    const screenedResumes = filteredResumes.filter(r => !r.isUnscreened);
     const excellentCount = screenedResumes.filter(r => r.score >= 75).length;
     const goodCount = screenedResumes.filter(r => r.score >= 60 && r.score < 75).length;
     const fairCount = screenedResumes.filter(r => r.score >= 45 && r.score < 60).length;
@@ -411,7 +412,7 @@ function ResultsContent() {
         .filter(a => a.jobId === selectedJobFilter)
         .map(a => a.candidateId);
       candidates = candidates.filter(c => 
-        (c as any).jobId === selectedJobFilter || assignedCandidateIds.includes(c.id)
+        c.jobId === selectedJobFilter || assignedCandidateIds.includes(c.id)
       );
     }
     
@@ -433,11 +434,11 @@ function ResultsContent() {
     // Quick score filter
     if (scoreFilter !== 'all') {
       candidates = candidates.filter(c => {
-        if (scoreFilter === 'unscreened') return (c as any).isUnscreened === true;
-        if (scoreFilter === 'excellent') return c.score >= 75 && !(c as any).isUnscreened;
-        if (scoreFilter === 'good') return c.score >= 60 && c.score < 75 && !(c as any).isUnscreened;
-        if (scoreFilter === 'fair') return c.score >= 45 && c.score < 60 && !(c as any).isUnscreened;
-        if (scoreFilter === 'low') return c.score < 45 && !(c as any).isUnscreened;
+        if (scoreFilter === 'unscreened') return c.isUnscreened === true;
+        if (scoreFilter === 'excellent') return c.score >= 75 && !c.isUnscreened;
+        if (scoreFilter === 'good') return c.score >= 60 && c.score < 75 && !c.isUnscreened;
+        if (scoreFilter === 'fair') return c.score >= 45 && c.score < 60 && !c.isUnscreened;
+        if (scoreFilter === 'low') return c.score < 45 && !c.isUnscreened;
         return true;
       });
     }
@@ -555,9 +556,9 @@ function ResultsContent() {
       });
 
       // Persist to backend
-      if ((candidate as any).applicationId) {
+      if (candidate.applicationId) {
         try {
-          await api.updateApplicationStatus((candidate as any).applicationId, newStatus);
+          await api.updateApplicationStatus(candidate.applicationId, newStatus);
         } catch (err) {
           console.error(`Failed to update status for ${id}:`, err);
         }
@@ -649,6 +650,34 @@ function ResultsContent() {
       alert('Candidate removed. Note: There may have been an issue syncing with the server.');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const [reparsingId, setReparsingId] = useState<string | null>(null);
+
+  const handleReparseResume = async (id: string) => {
+    if (!useRealApi || !isAuthenticated) return;
+    setReparsingId(id);
+    try {
+      const result = await api.reparseResume(id);
+      // Update local store with re-parsed data
+      const reparsed = {
+        id: result.id,
+        name: result.parsed_data?.name || 'Unknown',
+        email: result.parsed_data?.email || '',
+        phone: result.parsed_data?.phone || '',
+        skills: result.parsed_data?.skills || [],
+        education: result.parsed_data?.education || '',
+        experience: result.parsed_data?.experience || '',
+        score: 0,
+      };
+      // Refresh the results to get updated data
+      fetchScreeningResultsFromApi();
+    } catch (err) {
+      console.error('Failed to reparse resume:', err);
+      alert('Failed to reparse resume');
+    } finally {
+      setReparsingId(null);
     }
   };
 
@@ -755,6 +784,16 @@ function ResultsContent() {
           </div>
         </motion.div>
 
+        {/* Pending Applications Banner */}
+        {useRealApi && isAuthenticated && selectedJobFilter !== 'all' && (
+          <PendingApplicationsBanner
+            jobId={selectedJobFilter}
+            onActionComplete={() => {
+              bumpResultsVersion();
+            }}
+          />
+        )}
+
         {/* Stats Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -844,8 +883,8 @@ function ResultsContent() {
                     <option value="all">All Candidates</option>
                     {jobs.map((job) => {
                       // Count candidates from screening results (includes portal applicants) + manual assignments
-                      const screenedForJob = filteredResumes.filter((r: any) => r.jobId === job.id).length;
-                      const manuallyAssigned = candidateJobAssignments.filter(a => a.jobId === job.id && !filteredResumes.some((r: any) => r.id === a.candidateId && r.jobId === job.id)).length;
+                      const screenedForJob = filteredResumes.filter((r: Resume) => r.jobId === job.id).length;
+                      const manuallyAssigned = candidateJobAssignments.filter(a => a.jobId === job.id && !filteredResumes.some((r: Resume) => r.id === a.candidateId && r.jobId === job.id)).length;
                       const totalCount = screenedForJob + manuallyAssigned;
                       return (
                         <option key={job.id} value={job.id}>
@@ -1754,6 +1793,24 @@ function ResultsContent() {
                           
                           {/* Divider */}
                           <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+                          
+                          {/* Reparse */}
+                          {useRealApi && isAuthenticated && (
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleReparseResume(candidate.id)}
+                              disabled={reparsingId === candidate.id}
+                              className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all disabled:opacity-50"
+                              title="Reparse Resume"
+                            >
+                              {reparsingId === candidate.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </motion.button>
+                          )}
                           
                           {/* Delete */}
                           <motion.button

@@ -5,7 +5,7 @@ Message and Conversation models for HR-Candidate chat functionality.
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class DirectMessage(Document):
@@ -17,7 +17,7 @@ class DirectMessage(Document):
     content: str = Field(..., min_length=1, max_length=5000)
     
     # Read status
-    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     read_at: Optional[datetime] = None
     
     class Settings:
@@ -41,7 +41,7 @@ class DirectConversation(Document):
     job_id: Optional[str] = None         # Optional job context
     
     # Last message info for display
-    last_message_at: datetime = Field(default_factory=datetime.utcnow)
+    last_message_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_message_preview: Optional[str] = None
     
     # Unread counts
@@ -52,7 +52,7 @@ class DirectConversation(Document):
     deleted_for_users: List[str] = Field(default_factory=list)
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "direct_conversations"

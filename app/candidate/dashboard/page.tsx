@@ -30,6 +30,8 @@ import {
   getOpenJobs,
   getCandidateProfile,
   getCandidateDashboardStats,
+  type CandidateApplication,
+  type CandidateDashboardStats,
 } from '@/lib/api';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import {
@@ -183,12 +185,12 @@ export default function CandidateDashboardPage() {
       } else {
         const apps = appsData.applications || [];
         const total = apps.length;
-        const pending = apps.filter((a: any) => a.status === 'applied').length;
-        const screening = apps.filter((a: any) => a.status === 'screening').length;
-        const interview = apps.filter((a: any) => a.status === 'interview').length;
-        const offers = apps.filter((a: any) => a.status === 'offer').length;
-        const hired = apps.filter((a: any) => a.status === 'hired').length;
-        const rejected = apps.filter((a: any) => a.status === 'rejected').length;
+        const pending = apps.filter((a: CandidateApplication) => a.status === 'applied').length;
+        const screening = apps.filter((a: CandidateApplication) => a.status === 'screening').length;
+        const interview = apps.filter((a: CandidateApplication) => a.status === 'interview').length;
+        const offers = apps.filter((a: CandidateApplication) => a.status === 'offer').length;
+        const hired = apps.filter((a: CandidateApplication) => a.status === 'hired').length;
+        const rejected = apps.filter((a: CandidateApplication) => a.status === 'rejected').length;
         setStats({ total, pending, screening, interview, offers, hired, rejected });
       }
 
@@ -371,7 +373,7 @@ export default function CandidateDashboardPage() {
                 />
               ) : (
                 <div className="space-y-0.5">
-                  {recentApplications.map((app: any, i: number) => (
+                  {recentApplications.map((app: CandidateApplication, i: number) => (
                     <ApplicationListItem
                       key={app.id}
                       id={app.id}
@@ -535,7 +537,7 @@ export default function CandidateDashboardPage() {
                   />
                 ) : (
                   <div className="space-y-2">
-                    {upcomingInterviews.map((interview: any) => (
+                    {upcomingInterviews.map((interview: CandidateDashboardStats['upcoming_interviews'][number]) => (
                       <Link
                         key={interview.application_id}
                         href={`/candidate/applications/${interview.application_id}`}

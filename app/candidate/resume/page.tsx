@@ -2,18 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, CheckCircle, Plus, FileText, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Plus, FileText, X, Brain, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import * as api from '@/lib/api';
 import { ResumeVersion } from '@/lib/api';
 import {
   ResumeUploadZone,
   ResumeFileCard,
   ResumeTips,
+  ResumeInsights,
   ResumeVersionTabs,
   PercentileRankBadge,
   ATSScoreBreakdown,
   ImprovementSuggestions,
   JobATSChecker,
+  OptimizeBeforeAfter,
 } from '@/components/candidate/resume';
 
 const ALLOWED_TYPES = [
@@ -360,6 +363,31 @@ export default function CandidateResumePage() {
 
                 {/* Job-Specific ATS Checker */}
                 <JobATSChecker resumeId={activeVersionId || undefined} />
+
+                {/* AI Resume Insights — match score, optimization, ATS compatibility */}
+                <ResumeInsights resumeId={activeVersionId || undefined} />
+
+                {/* AI Resume Optimizer — before/after comparison */}
+                <OptimizeBeforeAfter resumeId={activeVersionId || undefined} />
+
+                {/* View Full ATS Dashboard link */}
+                <Link
+                  href="/candidate/resume/insights"
+                  className="flex items-center justify-between p-4 rounded-xl border border-candidate-500/20 bg-gradient-to-r from-candidate-500/5 to-cyan-500/5 dark:from-candidate-500/10 dark:to-cyan-500/10 hover:from-candidate-500/10 hover:to-cyan-500/10 dark:hover:from-candidate-500/15 dark:hover:to-cyan-500/15 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Brain className="h-5 w-5 text-candidate-500 dark:text-candidate-400" />
+                    <div>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        View Full ATS Panel
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Detailed analysis, job matching, and optimization tools
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-candidate-500 dark:text-candidate-400 group-hover:translate-x-1 transition-transform" />
+                </Link>
 
                 {/* Resume Tips */}
                 <ResumeTips />

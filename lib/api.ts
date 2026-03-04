@@ -9,15 +9,20 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 // Token storage
 let authToken: string | null = null;
 
+// SSR-safe localStorage helpers
+const isBrowser = typeof window !== 'undefined';
+
 /**
  * Set the authentication token
  */
 export function setAuthToken(token: string | null) {
   authToken = token;
-  if (token) {
-    localStorage.setItem('auth_token', token);
-  } else {
-    localStorage.removeItem('auth_token');
+  if (isBrowser) {
+    if (token) {
+      localStorage.setItem('auth_token', token);
+    } else {
+      localStorage.removeItem('auth_token');
+    }
   }
 }
 
@@ -25,7 +30,7 @@ export function setAuthToken(token: string | null) {
  * Get the authentication token
  */
 export function getAuthToken(): string | null {
-  if (!authToken) {
+  if (!authToken && isBrowser) {
     authToken = localStorage.getItem('auth_token');
   }
   return authToken;
@@ -66,7 +71,7 @@ async function apiRequest<T>(
       message = error.detail;
     } else if (Array.isArray(error.detail)) {
       // FastAPI validation errors return detail as an array of objects
-      message = error.detail.map((e: any) => e.msg || JSON.stringify(e)).join('; ');
+      message = error.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ');
     } else if (error.detail) {
       message = JSON.stringify(error.detail);
     }
@@ -271,6 +276,7 @@ export interface JobDescriptionResponse {
   location?: string;
   salary_range?: string;
   job_type: string;
+  remote?: boolean;
   is_active: boolean;
   candidates_screened: number;
   company?: string;
@@ -370,7 +376,7 @@ export async function updateApplicationStatus(
   });
 }
 
-export async function getApplicationsByStatus(status: string): Promise<any[]> {
+export async function getApplicationsByStatus(status: string): Promise<CandidateApplication[]> {
   return apiRequest(`/jobs/applications/by-status/${status}`);
 }
 
@@ -573,7 +579,7 @@ export async function updateProfile(data: { name?: string; email?: string; compa
   });
 }
 
-export async function updateNotificationPreferences(preferences: Record<string, boolean>): Promise<any> {
+export async function updateNotificationPreferences(preferences: Record<string, boolean>): Promise<{ message: string }> {
   return apiRequest('/auth/me', {
     method: 'PUT',
     body: JSON.stringify({ notification_preferences: preferences }),
@@ -615,6 +621,9 @@ export interface CandidateApplication {
   screening_result_id?: string;
   applied_at: string;
   updated_at: string;
+  created_at?: string;
+  title?: string;
+  candidate_name?: string;
   score?: number;
   score_visible?: boolean;
   feedback?: string;
@@ -641,8 +650,12 @@ export async function applyToJob(jobId: string, resumeId?: string): Promise<Cand
   });
 }
 
-export async function getCandidateApplications(): Promise<CandidateApplicationList> {
-  return apiRequest('/candidate/applications');
+export async function getCandidateApplications(
+  page: number = 1,
+  limit: number = 100
+): Promise<CandidateApplicationList> {
+  const skip = (page - 1) * limit;
+  return apiRequest(`/candidate/applications?skip=${skip}&limit=${limit}`);
 }
 
 export async function getApplicationDetail(id: string): Promise<CandidateApplication> {
@@ -661,11 +674,11 @@ export async function deleteApplication(id: string): Promise<{ message: string }
   });
 }
 
-export async function getCandidateResume(): Promise<any> {
+export async function getCandidateResume(): Promise<ResumeVersion | { resume: ResumeVersion }> {
   return apiRequest('/candidate/resume');
 }
 
-export async function uploadCandidateResume(file: File): Promise<any> {
+export async function uploadCandidateResume(file: File): Promise<ResumeResponse> {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -691,6 +704,7 @@ export async function uploadCandidateResume(file: File): Promise<any> {
 
 export interface ResumeVersion {
   id: string;
+  _id?: string;
   file_name: string;
   file_size: number;
   version_label: string | null;
@@ -829,18 +843,24 @@ export async function getATSDetailedBreakdown(resumeId: string): Promise<ATSDeta
 
 // ==================== Job-Specific ATS ====================
 
+export interface SkillMatchEntry {
+  skill: string;
+  match_type: string;
+  confidence: number;
+}
+
 export interface JobSpecificATS {
   job_id: string;
   job_title: string;
   ats_score: number;
   required_skills: {
-    matched: string[];
-    missing: string[];
+    matched: SkillMatchEntry[];
+    missing: SkillMatchEntry[];
     match_rate: number;
   };
   preferred_skills: {
-    matched: string[];
-    missing: string[];
+    matched: SkillMatchEntry[];
+    missing: SkillMatchEntry[];
     match_rate: number;
   };
   experience: {
@@ -878,8 +898,43 @@ export async function getResumeImprovements(resumeId: string): Promise<ResumeImp
   return apiRequest(`/insights/${resumeId}/improvements`);
 }
 
-export async function getCandidateProfile(): Promise<any> {
+export interface CandidateProfile {
+  name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  title?: string;
+  bio?: string;
+  website?: string;
+  linkedin?: string;
+  github?: string;
+  experience_years?: number;
+  education?: string;
+  skills?: string[];
+  resume_url?: string;
+}
+
+export async function getCandidateProfile(): Promise<CandidateProfile> {
   return apiRequest('/candidate/profile');
+}
+
+export async function updateCandidateProfile(data: {
+  name?: string;
+  phone?: string;
+  location?: string;
+  title?: string;
+  bio?: string;
+  website?: string;
+  linkedin?: string;
+  github?: string;
+  experience_years?: number;
+  education?: string;
+  skills?: string[];
+}): Promise<CandidateProfile> {
+  return apiRequest('/candidate/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }
 
 export interface CandidateDashboardStats {
@@ -922,12 +977,20 @@ export interface ChatMessage {
 
 export interface ChatConversation {
   id: string;
-  other_user: {
+  other_user?: {
     id: string;
     name: string;
     email: string;
     role: string;
   };
+  // HR view fields
+  hr_user_id?: string;
+  hr_user_name?: string;
+  candidate_user_id?: string;
+  candidate_user_name?: string;
+  candidate_email?: string;
+  // Common fields
+  company?: string;
   job_id?: string;
   job_title?: string;
   last_message_at: string;
@@ -935,8 +998,10 @@ export interface ChatConversation {
   last_message?: string;
   last_message_time?: string;
   updated_at?: string;
-  unread_count: number;
-  created_at: string;
+  unread_count?: number;
+  unread_count_hr?: number;
+  unread_count_candidate?: number;
+  created_at?: string;
 }
 
 export async function getConversations(): Promise<{ conversations: ChatConversation[]; total: number }> {
@@ -1052,6 +1117,34 @@ export async function getAdminStats(): Promise<{
   return apiRequest('/admin/stats');
 }
 
+export async function toggleUserActive(userId: string): Promise<{ message: string; user: { id: string; name: string; is_active: boolean } }> {
+  return apiRequest(`/admin/users/${userId}/toggle-active`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteUser(userId: string): Promise<{ message: string }> {
+  return apiRequest(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getUserDetail(userId: string): Promise<AdminUser> {
+  return apiRequest(`/admin/users/${userId}`);
+}
+
+export async function reparseResume(resumeId: string): Promise<ResumeResponse> {
+  return apiRequest(`/resumes/${resumeId}/reparse`, {
+    method: 'POST',
+  });
+}
+
+export async function reindexRAG(): Promise<{ message: string; documents_indexed: number }> {
+  return apiRequest('/chat/reindex', {
+    method: 'POST',
+  });
+}
+
 // ==================== HR Feedback ====================
 
 export async function sendCandidateFeedback(
@@ -1071,15 +1164,26 @@ export async function getResumeInsights(resumeId: string): Promise<{
   match_score: number;
   keyword_coverage: number;
   formatting_health: number;
+  matched_jobs?: { job_id: string; title: string; score: number }[];
 }> {
   return apiRequest(`/insights/${resumeId}`);
 }
 
 // ==================== Resume Optimization ====================
 
+export interface OptimizeChange {
+  section: string;
+  type: string;
+  detail: string;
+}
+
 export async function optimizeResumeWithAI(resumeId: string, instructions?: string): Promise<{
+  original_text: string;
   improved_text: string;
+  changes: OptimizeChange[];
   summary: string;
+  skills_added: string[];
+  skills_total: number;
 }> {
   return apiRequest(`/insights/${resumeId}/optimize`, {
     method: 'POST',

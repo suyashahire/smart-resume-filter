@@ -5,7 +5,7 @@ Conversation model for AI chatbot history.
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -20,7 +20,7 @@ class ChatMessage(BaseModel):
     """A single message in a conversation."""
     role: MessageRole
     content: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = Field(default_factory=dict)  # Citations, context used, etc.
 
 
@@ -39,8 +39,8 @@ class Conversation(Document):
     is_active: bool = Field(default=True)
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "conversations"

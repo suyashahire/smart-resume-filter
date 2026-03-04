@@ -34,9 +34,9 @@ export default function ApplicationDetailPage() {
       try {
         const data = await getApplicationDetail(applicationId);
         setApplication(data);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to fetch application:', error);
-        setError(error.message || 'Failed to load application');
+        setError(error instanceof Error ? error.message : 'Failed to load application');
       } finally {
         setIsLoading(false);
       }
@@ -53,8 +53,8 @@ export default function ApplicationDetailPage() {
       await withdrawApplication(applicationId);
       // Application is deleted — redirect back to list
       router.push('/candidate/applications');
-    } catch (err: any) {
-      setError(err.message || 'Failed to withdraw application');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to withdraw application');
       setIsWithdrawing(false);
     }
   };
@@ -64,8 +64,8 @@ export default function ApplicationDetailPage() {
     try {
       await deleteApplication(applicationId);
       router.push('/candidate/applications');
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete application');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete application');
       setIsDeleting(false);
     }
   };

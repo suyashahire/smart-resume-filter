@@ -5,7 +5,7 @@ Screening Result model for storing candidate-job matching results.
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SkillMatch(BaseModel):
@@ -71,7 +71,7 @@ class ScreeningResult(Document):
     status_updated_at: Optional[datetime] = None
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "screening_results"
@@ -82,6 +82,8 @@ class ScreeningResult(Document):
             "overall_score",
             "created_at",
             "application_status",
+            "application_id",
+            [("job_id", 1), ("overall_score", -1)],
         ]
 
 

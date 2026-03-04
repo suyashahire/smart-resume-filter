@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ChevronDown, X } from 'lucide-react';
+import { Search, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { getCandidateApplications } from '@/lib/api';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import {
@@ -26,27 +26,34 @@ export default function CandidateApplicationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [sortOpen, setSortOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 10;
 
-  const fetchApplications = useCallback(async () => {
+  const fetchApplications = useCallback(async (pageNum: number = page) => {
     try {
-      const data = await getCandidateApplications();
+      setIsLoading(true);
+      const data = await getCandidateApplications(pageNum, PAGE_SIZE);
       setApplications(data.applications || []);
+      setTotalCount(data.total || 0);
     } catch (error) {
       console.error('Failed to fetch applications:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   useEffect(() => {
-    fetchApplications();
-  }, [fetchApplications]);
+    fetchApplications(page);
+  }, [page]);
 
   // Re-fetch applications when status changes come in via WebSocket
   useRealtimeUpdates({
     onEvent: (event) => {
       if (event.type === 'application_status_changed') {
-        fetchApplications();
+        fetchApplications(page);
       }
     },
   });
@@ -218,7 +225,7 @@ export default function CandidateApplicationsPage() {
         >
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {filteredApplications.length === applications.length
-              ? `Showing ${applications.length} application${applications.length !== 1 ? 's' : ''}`
+              ? `Showing ${applications.length} of ${totalCount} application${totalCount !== 1 ? 's' : ''}${totalPages > 1 ? ` (page ${page} of ${totalPages})` : ''}`
               : `Showing ${filteredApplications.length} of ${applications.length} applications`}
           </p>
           {hasActiveFilter && (
@@ -254,7 +261,7 @@ export default function CandidateApplicationsPage() {
                   <ApplicationListCard
                     application={app}
                     index={index}
-                    onWithdrawn={fetchApplications}
+                    onWithdrawn={() => fetchApplications(page)}
                   />
                 </li>
               ))}
@@ -264,6 +271,57 @@ export default function CandidateApplicationsPage() {
               hasFilter={hasActiveFilter}
               onClearFilter={clearFilters}
             />
+          )}
+
+          {/* Pagination */}
+          {!isLoading && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    typeof item === 'string' ? (
+                      <span key={`dots-${idx}`} className="px-2 text-gray-400 text-sm">...</span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setPage(item)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                          page === item
+                            ? 'bg-candidate-500 text-white shadow-sm shadow-candidate-500/25'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </motion.div>
       </div>

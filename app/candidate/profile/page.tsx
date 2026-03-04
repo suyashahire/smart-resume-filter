@@ -386,7 +386,7 @@ export default function CandidateProfilePage() {
     }
   };
 
-  const handleChange = (field: keyof ProfileData, value: any) => {
+  const handleChange = (field: keyof ProfileData, value: ProfileData[keyof ProfileData]) => {
     setProfile(prev => ({ ...prev, [field]: value }));
     setHasChanges(true);
   };
@@ -398,7 +398,7 @@ export default function CandidateProfilePage() {
 
     try {
       setIsSaving(true);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await api.updateCandidateProfile(profile);
 
       if (user && profile.name !== user.name) {
         setUser({ ...user, name: profile.name });

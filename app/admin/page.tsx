@@ -11,7 +11,11 @@ import {
   Clock,
   TrendingUp,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Database,
+  Trash2,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import * as api from '@/lib/api';
 
@@ -31,6 +35,9 @@ export default function AdminDashboardPage() {
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isReindexing, setIsReindexing] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -276,6 +283,18 @@ export default function AdminDashboardPage() {
         )}
       </motion.div>
 
+      {/* Success Alert */}
+      {success && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-start gap-3"
+        >
+          <UserCheck className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+          <p className="text-green-700 dark:text-green-400">{success}</p>
+        </motion.div>
+      )}
+
       {/* Quick Actions */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -315,6 +334,60 @@ export default function AdminDashboardPage() {
             <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-hover:translate-x-1 transition-all" />
           </div>
         </Link>
+      </motion.div>
+
+      {/* System Maintenance */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.7 }}
+        className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6"
+      >
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">System Maintenance</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Manage search indexes and clean up stale data</p>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={async () => {
+              setIsReindexing(true);
+              setError('');
+              setSuccess('');
+              try {
+                const result = await api.reindexRAG();
+                setSuccess(`RAG index rebuilt — ${result.documents_indexed ?? 0} documents indexed`);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Reindex failed');
+              } finally {
+                setIsReindexing(false);
+              }
+            }}
+            disabled={isReindexing}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50"
+          >
+            {isReindexing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            {isReindexing ? 'Reindexing...' : 'Rebuild RAG Index'}
+          </button>
+          <button
+            onClick={async () => {
+              if (!confirm('Clean up orphaned screening results?')) return;
+              setIsCleaning(true);
+              setError('');
+              setSuccess('');
+              try {
+                const result = await api.cleanupOrphanedScreeningResults();
+                setSuccess(result.message || `Cleaned ${result.deleted_count} orphaned records`);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Cleanup failed');
+              } finally {
+                setIsCleaning(false);
+              }
+            }}
+            disabled={isCleaning}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 rounded-xl hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors disabled:opacity-50"
+          >
+            {isCleaning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            {isCleaning ? 'Cleaning...' : 'Clean Orphaned Data'}
+          </button>
+        </div>
       </motion.div>
     </div>
   );

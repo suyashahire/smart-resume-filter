@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Users, FileText, MessageSquare, TrendingUp, Award, Calendar, Cloud, HardDrive, RefreshCw, BarChart3, Sparkles, ArrowRight, Crown, Briefcase, Clock, Timer, CheckCircle2 } from 'lucide-react';
 import { SkillsDistributionChart, ScoreDistributionChart, PerformanceTrendChart } from '@/components/features/Charts';
-import { useStore } from '@/store/useStore';
+import { useStore, type Resume } from '@/store/useStore';
 import * as api from '@/lib/api';
 import RealtimeIndicator from '@/components/features/RealtimeIndicator';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
@@ -30,37 +30,38 @@ export default function DashboardPage() {
       const jobsData = await api.getJobDescriptions();
       
       if (jobsData && jobsData.length > 0) {
-        const allScreenedResumes: any[] = [];
-        const allResumes: any[] = [];
+        const allScreenedResumes: Resume[] = [];
+        const allResumes: Resume[] = [];
         
-        // Fetch screening results for each job
-        for (const job of jobsData) {
-          try {
-            const screeningResults = await api.getScreeningResults(job.id);
-            if (screeningResults && screeningResults.length > 0) {
-              const resultsWithJob = screeningResults.map((r: any) => ({
-                id: r.id,
-                name: r.name || 'Unknown',
-                email: r.email || '',
-                phone: r.phone || '',
-                skills: r.skills || [],
-                education: r.education || '',
-                experience: r.experience || '',
-                score: r.score || 0,
-                skillMatches: r.skill_matches || [],
-                jobId: job.id
-              }));
-              allScreenedResumes.push(...resultsWithJob);
-            }
-          } catch (err) {
-            // Job may not have screening results yet
+        // Fetch screening results for all jobs in parallel
+        const screeningPromises = jobsData.map(job =>
+          api.getScreeningResults(job.id).catch(() => [])
+        );
+        const allResults = await Promise.all(screeningPromises);
+        
+        allResults.forEach((screeningResults, index) => {
+          const job = jobsData[index];
+          if (screeningResults && screeningResults.length > 0) {
+            const resultsWithJob = screeningResults.map((r: api.ResumeWithScore) => ({
+              id: r.id,
+              name: r.name || 'Unknown',
+              email: r.email || '',
+              phone: r.phone || '',
+              skills: r.skills || [],
+              education: r.education || '',
+              experience: r.experience || '',
+              score: r.score || 0,
+              skillMatches: r.skill_matches || [],
+              jobId: job.id
+            }));
+            allScreenedResumes.push(...resultsWithJob);
           }
-        }
+        });
         
         // Also fetch all resumes for total count
         const resumesData = await api.getResumes();
         if (resumesData && resumesData.length > 0) {
-          const mappedResumes = resumesData.map((r: any) => ({
+          const mappedResumes = resumesData.map((r: api.ResumeResponse) => ({
             id: r.id,
             name: r.parsed_data?.name || 'Unknown',
             email: r.parsed_data?.email || '',
@@ -86,7 +87,7 @@ export default function DashboardPage() {
         setFilteredResumes(screenedOnly);
 
         // Auto-create candidateJobAssignments for screening results that don't have one
-        allScreenedResumes.forEach((r: any) => {
+        allScreenedResumes.forEach((r) => {
           if (r.jobId) {
             const existing = candidateJobAssignmentsRef.current.some(
               a => a.candidateId === r.id && a.jobId === r.jobId
@@ -100,7 +101,7 @@ export default function DashboardPage() {
         // No jobs found - still fetch raw resumes for total count
         const resumesData = await api.getResumes();
         if (resumesData && resumesData.length > 0) {
-          const mappedResumes = resumesData.map((r: any) => ({
+          const mappedResumes = resumesData.map((r: api.ResumeResponse) => ({
             id: r.id,
             name: r.parsed_data?.name || 'Unknown',
             email: r.parsed_data?.email || '',

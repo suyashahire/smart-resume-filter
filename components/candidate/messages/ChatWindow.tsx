@@ -17,7 +17,7 @@ import TypingIndicator from './TypingIndicator';
 import type { ChatConversation, ChatMessage } from '@/store/useStore';
 
 function getDisplayName(c: ChatConversation): string {
-  return c.other_user?.name ?? (c as any).hr_user_name ?? 'Recruiter';
+  return c.other_user?.name ?? c.hr_user_name ?? 'Recruiter';
 }
 
 interface ChatWindowProps {
@@ -86,8 +86,8 @@ export default function ChatWindow({
 
   const displayName = getDisplayName(conversation);
   const jobOrCompany = conversation.job_title
-    ? `${conversation.job_title}${(conversation as any).company ? ` at ${(conversation as any).company}` : ''}`
-    : (conversation as any).company;
+    ? `${conversation.job_title}${conversation.company ? ` at ${conversation.company}` : ''}`
+    : conversation.company;
 
   return (
     <div className="flex-1 flex flex-col rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white dark:bg-gray-900 overflow-hidden">

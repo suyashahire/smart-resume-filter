@@ -43,7 +43,7 @@ export interface Activity {
   candidateId?: string;
   jobId?: string;
   timestamp: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface Interview {
@@ -138,6 +138,7 @@ export interface ChatConversation {
   candidate_user_name?: string;
   candidate_email?: string;
   // Common fields
+  company?: string;
   job_id?: string;
   job_title?: string;
   last_message_at: string;

@@ -7,7 +7,7 @@ from fastapi import WebSocket
 from typing import Dict, List, Set, Any
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -72,7 +72,7 @@ class ConnectionManager:
         # Store connection metadata
         self.connection_info[websocket] = {
             "user_id": user_id,
-            "connected_at": datetime.utcnow().isoformat(),
+            "connected_at": datetime.now(timezone.utc).isoformat(),
         }
         
         # Send connection confirmation
@@ -82,7 +82,7 @@ class ConnectionManager:
                 "type": EventType.CONNECTION_ESTABLISHED,
                 "data": {
                     "message": "Connected to HireQ real-time updates",
-                    "connected_at": datetime.utcnow().isoformat(),
+                    "connected_at": datetime.now(timezone.utc).isoformat(),
                     "total_connections": len(self.all_connections)
                 }
             }
@@ -164,7 +164,7 @@ class ConnectionManager:
         message = {
             "type": event_type,
             "data": data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         if user_id:

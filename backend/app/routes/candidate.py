@@ -4,12 +4,12 @@ Candidate routes for job browsing, applications, and profile management.
 
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.responses import FileResponse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 import os
 import uuid
 
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, CandidateProfileUpdate
 from app.models.job import JobDescription, JobDescriptionResponse, ApplicationMode
 from app.models.resume import Resume, ResumeVersionResponse
 from app.models.application import (
@@ -22,6 +22,17 @@ from app.services.resume_parser import get_resume_parser
 from app.services.matching import get_matching_service
 from app.models.notification import Notification, NotificationType
 from app.services.websocket_manager import get_connection_manager, EventType
+from beanie import PydanticObjectId
+
+def _to_object_ids(str_ids: list) -> list:
+    """Convert a list of string IDs to PydanticObjectId, skipping invalid ones."""
+    ids = []
+    for sid in str_ids:
+        try:
+            ids.append(PydanticObjectId(sid))
+        except Exception:
+            pass
+    return ids
 
 router = APIRouter()
 matching_service = get_matching_service()
@@ -42,27 +53,27 @@ async def get_open_jobs(
     
     No authentication required - jobs are public.
     """
-    # Build query for open jobs
+    import re as re_module
+    
+    # Build query for open jobs with all filters applied at DB level
     query = {"status": "open", "is_active": True}
     
-    jobs = await JobDescription.find(query).skip(skip).limit(limit).to_list()
-    
-    # Filter by search term if provided
     if search:
-        search_lower = search.lower()
-        jobs = [j for j in jobs if 
-                search_lower in j.title.lower() or 
-                search_lower in j.description.lower() or
-                any(search_lower in skill.lower() for skill in j.required_skills)]
+        search_regex = re_module.escape(search)
+        query["$or"] = [
+            {"title": {"$regex": search_regex, "$options": "i"}},
+            {"description": {"$regex": search_regex, "$options": "i"}},
+            {"required_skills": {"$elemMatch": {"$regex": search_regex, "$options": "i"}}},
+        ]
     
-    # Filter by job type if provided
     if job_type:
-        jobs = [j for j in jobs if j.job_type == job_type]
+        query["job_type"] = job_type
     
-    # Filter by location if provided
     if location:
-        location_lower = location.lower()
-        jobs = [j for j in jobs if j.location and location_lower in j.location.lower()]
+        location_regex = re_module.escape(location)
+        query["location"] = {"$regex": location_regex, "$options": "i"}
+    
+    jobs = await JobDescription.find(query).skip(skip).limit(limit).to_list()
     
     return [
         JobDescriptionResponse(
@@ -83,6 +94,16 @@ async def get_open_jobs(
         )
         for job in jobs
     ]
+
+
+@router.get("/jobs/saved")
+async def get_saved_jobs(
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Get list of saved job IDs for the current candidate.
+    """
+    return {"saved_jobs": current_user.saved_jobs}
 
 
 @router.get("/jobs/{job_id}", response_model=JobDescriptionResponse)
@@ -202,7 +223,7 @@ async def apply_to_job(
         status_history=[
             StatusChange(
                 to_status=initial_status.value,
-                changed_at=datetime.utcnow(),
+                changed_at=datetime.now(timezone.utc),
                 note=status_note
             )
         ]
@@ -260,7 +281,7 @@ async def apply_to_job(
                     StatusChange(
                         from_status=ApplicationStatus.APPLIED.value,
                         to_status=ApplicationStatus.SCREENING.value,
-                        changed_at=datetime.utcnow(),
+                        changed_at=datetime.now(timezone.utc),
                         note=f"Auto-screened with score: {result['score']:.1f}"
                     )
                 )
@@ -340,14 +361,16 @@ async def apply_to_job(
 
 @router.get("/applications", response_model=ApplicationListResponse)
 async def get_my_applications(
+    skip: int = 0,
+    limit: int = 10,
     current_user: User = Depends(require_candidate),
 ):
     """
-    Get all applications for the current candidate.
+    Get applications for the current candidate with pagination.
     """
-    applications = await Application.find(
-        {"candidate_id": str(current_user.id)}
-    ).sort("-applied_at").to_list()
+    query = Application.find({"candidate_id": str(current_user.id)}).sort("-applied_at")
+    total_count = await Application.find({"candidate_id": str(current_user.id)}).count()
+    applications = await query.skip(skip).limit(limit).to_list()
     
     # Build response with job details
     result = []
@@ -389,7 +412,7 @@ async def get_my_applications(
     
     return ApplicationListResponse(
         applications=result,
-        total=len(result)
+        total=total_count
     )
 
 
@@ -633,7 +656,7 @@ async def upload_my_resume(
         existing_resume.raw_text = raw_text
         existing_resume.is_parsed = True
         existing_resume.parse_error = None
-        existing_resume.updated_at = datetime.utcnow()
+        existing_resume.updated_at = datetime.now(timezone.utc)
         await existing_resume.save()
         resume = existing_resume
     else:
@@ -814,12 +837,12 @@ async def set_resume_as_primary(
     
     # Unset current primary
     await Resume.find({"user_id": str(current_user.id), "is_primary": True}).update(
-        {"$set": {"is_primary": False, "updated_at": datetime.utcnow()}}
+        {"$set": {"is_primary": False, "updated_at": datetime.now(timezone.utc)}}
     )
     
     # Set new primary
     resume.is_primary = True
-    resume.updated_at = datetime.utcnow()
+    resume.updated_at = datetime.now(timezone.utc)
     await resume.save()
     
     return {
@@ -854,7 +877,7 @@ async def update_resume_version(
     if version_label is not None:
         resume.version_label = version_label
     
-    resume.updated_at = datetime.utcnow()
+    resume.updated_at = datetime.now(timezone.utc)
     await resume.save()
     
     return {
@@ -912,7 +935,7 @@ async def delete_resume_version(
         other_resume = await Resume.find_one({"user_id": str(current_user.id)})
         if other_resume:
             other_resume.is_primary = True
-            other_resume.updated_at = datetime.utcnow()
+            other_resume.updated_at = datetime.now(timezone.utc)
             await other_resume.save()
     
     return {"message": "Resume deleted successfully"}
@@ -987,24 +1010,35 @@ async def get_dashboard_stats(
     
     upcoming_interviews = []
     
+    # Collect job_ids for interview-stage apps to batch-fetch
+    interview_app_job_ids = []
     for app in all_apps:
         status_val = app.status.value if hasattr(app.status, 'value') else str(app.status)
         if status_val in counts:
             counts[status_val] += 1
+        if status_val == "interview" and app.job_id:
+            interview_app_job_ids.append(app.job_id)
+    
+    # Batch-fetch jobs for interview-stage applications
+    if interview_app_job_ids:
+        jobs_list = await JobDescription.find({"_id": {"$in": _to_object_ids(list(set(interview_app_job_ids)))}}).to_list()
+        job_map = {str(j.id): j for j in jobs_list}
+    else:
+        job_map = {}
+    
+    for app in all_apps:
+        status_val = app.status.value if hasattr(app.status, 'value') else str(app.status)
         
         # Collect apps in interview stage for "upcoming interviews"
         if status_val == "interview":
-            # Try to get job title
+            # Try to get job title from batch-fetched map
             job_title = app.job_title if hasattr(app, 'job_title') and app.job_title else None
             company = app.company if hasattr(app, 'company') and app.company else None
-            if not job_title:
-                try:
-                    job = await JobDescription.get(app.job_id)
-                    if job:
-                        job_title = job.title
-                        company = job.company
-                except Exception:
-                    job_title = "Unknown Position"
+            if not job_title and app.job_id:
+                job = job_map.get(app.job_id)
+                if job:
+                    job_title = job.title
+                    company = job.company
             
             upcoming_interviews.append({
                 "application_id": str(app.id),
@@ -1066,16 +1100,36 @@ async def get_profile(
 
 @router.put("/profile")
 async def update_profile(
-    name: Optional[str] = None,
+    data: CandidateProfileUpdate,
     current_user: User = Depends(require_candidate),
 ):
     """
     Update the candidate's profile.
     """
-    if name:
-        current_user.name = name
+    if data.name is not None:
+        current_user.name = data.name
+    if data.phone is not None:
+        current_user.phone = data.phone
+    if data.location is not None:
+        current_user.location = data.location
+    if data.title is not None:
+        current_user.title = data.title
+    if data.bio is not None:
+        current_user.bio = data.bio
+    if data.website is not None:
+        current_user.website = data.website
+    if data.linkedin is not None:
+        current_user.linkedin = data.linkedin
+    if data.github is not None:
+        current_user.github = data.github
+    if data.experience_years is not None:
+        current_user.experience_years = data.experience_years
+    if data.education is not None:
+        current_user.education = data.education
+    if data.skills is not None:
+        current_user.skills = data.skills
     
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = datetime.now(timezone.utc)
     await current_user.save()
     
     return {
@@ -1084,6 +1138,16 @@ async def update_profile(
             "id": str(current_user.id),
             "name": current_user.name,
             "email": current_user.email,
+            "phone": current_user.phone,
+            "location": current_user.location,
+            "title": current_user.title,
+            "bio": current_user.bio,
+            "website": current_user.website,
+            "linkedin": current_user.linkedin,
+            "github": current_user.github,
+            "experience_years": current_user.experience_years,
+            "education": current_user.education,
+            "skills": current_user.skills,
         }
     }
 
@@ -1104,7 +1168,7 @@ async def save_job(
 
     if job_id not in current_user.saved_jobs:
         current_user.saved_jobs.append(job_id)
-        current_user.updated_at = datetime.utcnow()
+        current_user.updated_at = datetime.now(timezone.utc)
         await current_user.save()
 
     return {"message": "Job saved", "saved_jobs": current_user.saved_jobs}
@@ -1120,17 +1184,7 @@ async def unsave_job(
     """
     if job_id in current_user.saved_jobs:
         current_user.saved_jobs.remove(job_id)
-        current_user.updated_at = datetime.utcnow()
+        current_user.updated_at = datetime.now(timezone.utc)
         await current_user.save()
 
     return {"message": "Job unsaved", "saved_jobs": current_user.saved_jobs}
-
-
-@router.get("/jobs/saved")
-async def get_saved_jobs(
-    current_user: User = Depends(require_candidate),
-):
-    """
-    Get list of saved job IDs for the current candidate.
-    """
-    return {"saved_jobs": current_user.saved_jobs}

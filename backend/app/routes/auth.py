@@ -2,9 +2,11 @@
 Authentication routes for user registration, login, and management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+import re
+from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from datetime import datetime, timedelta
+from pydantic import BaseModel, Field, field_validator
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Callable
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -39,9 +41,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -109,15 +111,19 @@ require_candidate = require_role(UserRole.CANDIDATE)
 require_admin = require_role(UserRole.ADMIN)
 require_hr_or_admin = require_role(UserRole.HR_MANAGER, UserRole.ADMIN)
 
+# Rate limiter
+from app.limiter import limiter
+
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate):
+@limiter.limit("3/minute")
+async def register(request: Request, user_data: UserCreate):
     """
     Register a new user.
     
     - **name**: User's full name
     - **email**: User's email address (must be unique)
-    - **password**: Password (minimum 6 characters)
+    - **password**: Password (minimum 8 characters, must contain letter + digit)
     - **role**: User role (hr_manager, admin, viewer, candidate)
     
     Registration behavior:
@@ -205,7 +211,8 @@ async def register(user_data: UserCreate):
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("5/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     """
     Login with email and password.
     
@@ -242,7 +249,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
     
     # Update last login
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     await user.save()
     
     # Create access token
@@ -266,7 +273,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 @router.post("/login/json", response_model=Token)
-async def login_json(login_data: UserLogin):
+@limiter.limit("5/minute")
+async def login_json(request: Request, login_data: UserLogin):
     """
     Login with JSON body (alternative to form data).
     
@@ -302,7 +310,7 @@ async def login_json(login_data: UserLogin):
         )
     
     # Update last login
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     await user.save()
     
     # Create access token
@@ -367,7 +375,7 @@ async def update_current_user(
     if user_update.notification_preferences is not None:
         current_user.notification_preferences = user_update.notification_preferences
     
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = datetime.now(timezone.utc)
     await current_user.save()
     
     return UserResponse(
@@ -382,6 +390,106 @@ async def update_current_user(
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema for password change requests."""
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if not re.search(r'[A-Za-z]', v):
+            raise ValueError('Password must contain at least one letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        return v
+
+
+@router.post("/change-password")
+async def change_password(
+    request: Request,
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Change the current user's password.
+    
+    - **current_password**: Current password for verification
+    - **new_password**: New password (minimum 8 characters, must contain letter + digit)
+    """
+    # Verify current password
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Update password
+    current_user.password_hash = get_password_hash(data.new_password)
+    current_user.updated_at = datetime.now(timezone.utc)
+    await current_user.save()
+    
+    return {"message": "Password changed successfully"}
+
+
+@router.delete("/account")
+async def delete_account(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Delete the current user's account and all associated data.
+    
+    This is irreversible. Cascades deletes to:
+    - Resumes
+    - Applications
+    - Screening results
+    - Interviews
+    - Conversations
+    - Notifications
+    """
+    from app.models.resume import Resume
+    from app.models.application import Application
+    from app.models.screening import ScreeningResult
+    from app.models.interview import Interview
+    from app.models.conversation import Conversation
+    from app.models.message import DirectConversation, DirectMessage
+    from app.models.notification import Notification
+    
+    user_id = str(current_user.id)
+    
+    # Gather resume IDs first (before deleting anything)
+    user_resumes = await Resume.find({"user_id": user_id}).to_list()
+    resume_ids = [str(r.id) for r in user_resumes]
+    
+    # Delete screening results and interviews linked to resumes
+    if resume_ids:
+        await ScreeningResult.find({"resume_id": {"$in": resume_ids}}).delete()
+        await Interview.find({"resume_id": {"$in": resume_ids}}).delete()
+    
+    # Delete resumes, applications
+    await Resume.find({"user_id": user_id}).delete()
+    await Application.find({"candidate_id": user_id}).delete()
+    
+    # Delete AI chatbot conversations (Conversation model uses user_id)
+    await Conversation.find({"user_id": user_id}).delete()
+    
+    # Delete direct messaging conversations and messages
+    await DirectConversation.find(
+        {"$or": [{"hr_user_id": user_id}, {"candidate_user_id": user_id}]}
+    ).delete()
+    await DirectMessage.find(
+        {"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]}
+    ).delete()
+    
+    # Delete notifications (Notification model uses recipient_id)
+    await Notification.find({"recipient_id": user_id}).delete()
+    
+    # Finally delete the user
+    await current_user.delete()
+    
+    return {"message": "Account deleted successfully"}
 
 
 @router.post("/logout")

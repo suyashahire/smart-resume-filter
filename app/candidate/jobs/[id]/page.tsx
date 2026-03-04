@@ -9,6 +9,7 @@ import {
   JobHeader,
   JobDescription,
   ApplySidebar,
+  JobATSPreview,
   JobDetailSkeleton,
 } from '@/components/candidate/job-detail';
 
@@ -55,19 +56,19 @@ export default function JobDetailPage() {
         if (matchingApp) {
           setApplicationStatus(matchingApp.status || 'applied');
         }
-        const resolvedResume = (resumeData as any)?.resume ?? resumeData;
-        setHasResume(!!(resolvedResume && (resolvedResume.id || resolvedResume.filename)));
-        const profile = (profileData as any) ?? {};
+        const resolvedResume = resumeData && 'resume' in resumeData ? resumeData.resume : resumeData;
+        setHasResume(!!(resolvedResume && (resolvedResume.id || resolvedResume.file_name)));
+        const profile = profileData ?? {} as Partial<import('@/lib/api').CandidateProfile>;
         const checks = [
           profile?.name,
-          profile?.email ?? (profileData as any)?.email,
+          profile?.email,
           profile?.phone,
           profile?.resume_url ?? resolvedResume,
         ].filter(Boolean).length;
         setProfileCompleteness(checks ? Math.round((checks / 4) * 100) : undefined);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to fetch job:', err);
-        setError(err?.message || 'Failed to load job details');
+        setError(err instanceof Error ? err.message : 'Failed to load job details');
       } finally {
         setIsLoading(false);
       }
@@ -82,8 +83,8 @@ export default function JobDetailPage() {
       await applyToJob(jobId);
       setApplied(true);
       setApplicationStatus('applied');
-    } catch (err: any) {
-      setApplyError(err?.message || 'Failed to apply');
+    } catch (err: unknown) {
+      setApplyError(err instanceof Error ? err.message : 'Failed to apply');
     } finally {
       setIsApplying(false);
     }
@@ -154,7 +155,7 @@ export default function JobDetailPage() {
               education_required={job.education_required}
             />
           </main>
-          <aside className="lg:col-span-4">
+          <aside className="lg:col-span-4 space-y-6">
             <ApplySidebar
               jobId={jobId}
               jobTitle={job.title}
@@ -169,6 +170,7 @@ export default function JobDetailPage() {
               hasResume={hasResume}
               profileCompleteness={profileCompleteness}
             />
+            <JobATSPreview jobId={jobId} />
           </aside>
         </div>
       </div>

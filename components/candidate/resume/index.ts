@@ -7,4 +7,7 @@ export { default as PercentileRankBadge } from './PercentileRankBadge';
 export { default as ATSScoreBreakdown } from './ATSScoreBreakdown';
 export { default as ImprovementSuggestions } from './ImprovementSuggestions';
 export { default as JobATSChecker } from './JobATSChecker';
+export { default as OptimizeBeforeAfter } from './OptimizeBeforeAfter';
+export { default as ResumeInsightsTabs } from './ResumeInsightsTabs';
+export type { InsightTab } from './ResumeInsightsTabs';
 export type { ResumeFileData } from './ResumeFileCard';

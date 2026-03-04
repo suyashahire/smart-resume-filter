@@ -170,8 +170,8 @@ export default function JobCard({
     try {
       await applyToJob(job.id);
       onAppliedSuccess(job.id);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to apply');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to apply');
     } finally {
       setIsApplying(false);
     }

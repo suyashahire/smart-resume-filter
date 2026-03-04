@@ -3,7 +3,7 @@ Messaging routes for HR-Candidate chat functionality.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from app.models.user import User, UserRole
@@ -14,8 +14,19 @@ from app.models.message import (
     ConversationResponse, ConversationListResponse, MessagesListResponse,
     UserSummary
 )
+from beanie import PydanticObjectId
 from app.routes.auth import get_current_user
 from app.services.websocket_manager import get_connection_manager, EventType
+
+def _to_object_ids(str_ids: list) -> list:
+    """Convert a list of string IDs to PydanticObjectId, skipping invalid ones."""
+    ids = []
+    for sid in str_ids:
+        try:
+            ids.append(PydanticObjectId(sid))
+        except Exception:
+            pass
+    return ids
 
 router = APIRouter()
 
@@ -57,18 +68,39 @@ async def get_conversations(
     
     conversations = await DirectConversation.find(query).sort("-last_message_at").to_list()
     
-    # Build response with other user info
+    # Batch-fetch all referenced users and jobs to avoid N+1 queries
+    other_user_ids = []
+    job_ids = []
+    for conv in conversations:
+        other_user_ids.append(get_other_user_id(conv, current_user))
+        if conv.job_id:
+            job_ids.append(conv.job_id)
+    
+    # Deduplicate and batch-fetch
+    if other_user_ids:
+        users_list = await User.find({"_id": {"$in": _to_object_ids(list(set(other_user_ids)))}}).to_list()
+        user_map = {str(u.id): u for u in users_list}
+    else:
+        user_map = {}
+    
+    if job_ids:
+        jobs_list = await JobDescription.find({"_id": {"$in": _to_object_ids(list(set(job_ids)))}}).to_list()
+        job_map = {str(j.id): j for j in jobs_list}
+    else:
+        job_map = {}
+    
+    # Build response with pre-fetched data
     result = []
     for conv in conversations:
         other_user_id = get_other_user_id(conv, current_user)
-        other_user = await User.get(other_user_id)
+        other_user = user_map.get(other_user_id)
         
         if not other_user:
             continue
         
         job_title = None
         if conv.job_id:
-            job = await JobDescription.get(conv.job_id)
+            job = job_map.get(conv.job_id)
             if job:
                 job_title = job.title
         
@@ -282,7 +314,7 @@ async def mark_as_read(
         "conversation_id": conversation_id,
         "receiver_id": user_id,
         "read_at": None
-    }).update_many({"$set": {"read_at": datetime.utcnow()}})
+    }).update_many({"$set": {"read_at": datetime.now(timezone.utc)}})
     
     # Reset unread count based on user's position in the conversation
     user_id_str = str(current_user.id)
@@ -301,7 +333,7 @@ async def mark_as_read(
         {
             "conversation_id": conversation_id,
             "read_by": user_id,
-            "read_at": datetime.utcnow().isoformat(),
+            "read_at": datetime.now(timezone.utc).isoformat(),
         },
         user_id=other_user_id,
     )

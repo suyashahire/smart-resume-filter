@@ -9,7 +9,7 @@ import {
   ArrowRight, Sparkles, Upload, Search, TrendingUp, Award,
   Briefcase, Clock, UserCheck, Star, ChevronRight, Activity
 } from 'lucide-react';
-import { useStore } from '@/store/useStore';
+import { useStore, type Resume } from '@/store/useStore';
 
 export default function Home() {
   const router = useRouter();
@@ -30,9 +30,9 @@ export default function Home() {
   const stats = useMemo(() => {
     const totalCandidates = filteredResumes.length || resumes.length;
     const activeJobs = jobs.length;
-    const screened = filteredResumes.filter((r: any) => !r.isUnscreened).length;
+    const screened = filteredResumes.filter((r: Resume) => !r.isUnscreened).length;
     const avgScore = screened > 0
-      ? Math.round(filteredResumes.filter((r: any) => !r.isUnscreened).reduce((acc: number, r) => acc + r.score, 0) / screened)
+      ? Math.round(filteredResumes.filter((r: Resume) => !r.isUnscreened).reduce((acc: number, r) => acc + r.score, 0) / screened)
       : 0;
     const excellent = filteredResumes.filter(r => r.score >= 75).length;
     return { totalCandidates, activeJobs, screened, avgScore, excellent };
@@ -44,7 +44,13 @@ export default function Home() {
       .slice(0, 5);
   }, [filteredResumes]);
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const quickActions = [
     { href: '/upload-resume', icon: Upload, label: 'Upload Resumes', desc: 'Screen new candidates', gradient: 'from-blue-500 to-indigo-600' },
@@ -196,7 +202,7 @@ export default function Home() {
                   if (score >= 45) return 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30';
                   return 'text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30';
                 };
-                const isUnscreened = (candidate as any).isUnscreened;
+                const isUnscreened = candidate.isUnscreened;
                 return (
                   <motion.div
                     key={candidate.id}
@@ -255,11 +261,11 @@ export default function Home() {
                   className="bg-white dark:bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all"
                 >
                   <h3 className="font-semibold text-gray-900 dark:text-white truncate">{job.title}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{(job as any).department || (job as any).location || 'No department set'}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{job.description?.substring(0, 60) || 'No description'}</p>
                   <div className="flex items-center gap-2 mt-3">
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium">
                       <UserCheck className="h-3 w-3" />
-                      {filteredResumes.filter((r: any) => r.jobId === job.id).length} candidates
+                      {filteredResumes.filter((r: Resume) => r.jobId === job.id).length} candidates
                     </span>
                   </div>
                 </motion.div>

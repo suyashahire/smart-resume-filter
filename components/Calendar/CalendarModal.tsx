@@ -117,7 +117,7 @@ export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }
           // Candidate: use dashboard stats for upcoming interviews
           const stats = await api.getCandidateDashboardStats();
           if (stats?.upcoming_interviews?.length > 0) {
-            const autoEvents: CalendarEvent[] = stats.upcoming_interviews.map((interview: any) => {
+            const autoEvents: CalendarEvent[] = stats.upcoming_interviews.map((interview: api.CandidateDashboardStats['upcoming_interviews'][number]) => {
               const dateStr = interview.updated_at || interview.applied_at || new Date().toISOString();
               const date = new Date(dateStr);
               const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -141,7 +141,7 @@ export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }
           try {
             const appsData = await api.getApplicationsByStatus('interview');
             if (appsData?.length > 0) {
-              const autoEvents: CalendarEvent[] = appsData.map((app: any) => {
+              const autoEvents: CalendarEvent[] = appsData.map((app: api.CandidateApplication) => {
                 const dateStr = app.updated_at || app.applied_at || new Date().toISOString();
                 const date = new Date(dateStr);
                 const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

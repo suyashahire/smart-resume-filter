@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -71,7 +71,7 @@ function GlassCard({ children, className = '', danger = false }: { children: Rea
 }
 
 /* ─── section heading ─── */
-function SectionHeading({ icon: Icon, title, subtitle, iconColor = 'text-cyan-400' }: { icon: any; title: string; subtitle?: string; iconColor?: string }) {
+function SectionHeading({ icon: Icon, title, subtitle, iconColor = 'text-cyan-400' }: { icon: ComponentType<{ className?: string }>; title: string; subtitle?: string; iconColor?: string }) {
   return (
     <div className="flex items-center gap-3 mb-6">
       <div className={`w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center ${iconColor}`}>
@@ -86,7 +86,7 @@ function SectionHeading({ icon: Icon, title, subtitle, iconColor = 'text-cyan-40
 }
 
 /* ─── form input ─── */
-function GlassInput({ icon: Icon, label, disabled = false, ...props }: { icon: any; label: string; disabled?: boolean } & React.InputHTMLAttributes<HTMLInputElement>) {
+function GlassInput({ icon: Icon, label, disabled = false, ...props }: { icon: ComponentType<{ className?: string }>; label: string; disabled?: boolean } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-300 mb-2">{label}</label>

@@ -4,9 +4,10 @@ Uses sentence-transformers for embeddings and ChromaDB for vector storage.
 """
 
 import os
+import logging
 import asyncio
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     import chromadb
@@ -145,7 +146,7 @@ class RAGService:
                     "email": parsed.get("email", ""),
                     "skills": ", ".join(parsed.get("skills", [])) if isinstance(parsed.get("skills"), list) else "",
                     "type": "resume",
-                    "indexed_at": datetime.utcnow().isoformat()
+                    "indexed_at": datetime.now(timezone.utc).isoformat()
                 }]
             )
     
@@ -192,7 +193,7 @@ class RAGService:
                     "title": job_data.get("title", "Unknown"),
                     "company": job_data.get("company", ""),
                     "type": "job",
-                    "indexed_at": datetime.utcnow().isoformat()
+                    "indexed_at": datetime.now(timezone.utc).isoformat()
                 }]
             )
     
@@ -203,7 +204,7 @@ class RAGService:
         try:
             self.resumes_collection.delete(ids=[resume_id])
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("Failed to remove resume %s from RAG index", resume_id)
     
     async def remove_job(self, job_id: str):
         """Remove a job from the index."""
@@ -212,7 +213,7 @@ class RAGService:
         try:
             self.jobs_collection.delete(ids=[job_id])
         except Exception:
-            pass
+            logging.getLogger(__name__).warning("Failed to remove job %s from RAG index", job_id)
     
     async def search(self, query: str, n_results: int = 5, search_type: str = "all") -> List[Dict[str, Any]]:
         """

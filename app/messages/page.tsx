@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
+import { useRealtimeUpdates, RealtimeEvent } from "@/hooks/useRealtimeUpdates";
 import {
   MessageSquare,
   Send,
@@ -341,9 +341,9 @@ function HRMessagesContent() {
     userId: user?.id,
     enabled: isAuthenticated && isHydrated,
     onEvent: useCallback(
-      (event: any) => {
+      (event: RealtimeEvent) => {
         if (event.type === "new_message") {
-          const data = event.data as any;
+          const data = event.data;
           const currentConv = selectedConversationRef.current;
           if (
             currentConv &&
@@ -361,7 +361,7 @@ function HRMessagesContent() {
             .getConversations()
             .then((res) => {
               const hrConversations = (res.conversations || []).map(
-                (c: any) => ({
+                (c) => ({
                   ...c,
                   candidate_user_id:
                     c.other_user?.id || c.candidate_user_id,
@@ -380,7 +380,7 @@ function HRMessagesContent() {
 
         // Typing indicator events
         if (event.type === "typing_started" || event.type === "typing_stopped") {
-          const data = event.data as any;
+          const data = event.data;
           const currentConv = selectedConversationRef.current;
           if (currentConv && data.conversation_id === currentConv.id) {
             setShowTypingIndicator(event.type === "typing_started");
@@ -389,7 +389,7 @@ function HRMessagesContent() {
 
         // Read receipts — update check marks in real-time
         if (event.type === "messages_read") {
-          const data = event.data as any;
+          const data = event.data;
           const currentConv = selectedConversationRef.current;
           if (currentConv && data.conversation_id === currentConv.id) {
             // Re-fetch messages to get updated read_at timestamps
@@ -427,7 +427,7 @@ function HRMessagesContent() {
     if (!candidateIdParam || candidateHandled || isLoading || !conversations)
       return;
     const existing = conversations.find(
-      (c: any) =>
+      (c) =>
         c.candidate_user_id === candidateIdParam ||
         c.other_user?.id === candidateIdParam
     );
@@ -453,7 +453,7 @@ function HRMessagesContent() {
     try {
       setIsLoading(true);
       const data = await api.getConversations();
-      const hrConversations = (data.conversations || []).map((c: any) => ({
+      const hrConversations = (data.conversations || []).map((c) => ({
         ...c,
         candidate_user_id: c.other_user?.id || c.candidate_user_id,
         candidate_user_name: c.other_user?.name || c.candidate_user_name,
@@ -524,7 +524,7 @@ function HRMessagesContent() {
 
       if (selectedConversation.id === "new") {
         const data = await api.getConversations();
-        const hrConversations = (data.conversations || []).map((c: any) => ({
+        const hrConversations = (data.conversations || []).map((c) => ({
           ...c,
           candidate_user_id: c.other_user?.id || c.candidate_user_id,
           candidate_user_name: c.other_user?.name || c.candidate_user_name,
@@ -533,7 +533,7 @@ function HRMessagesContent() {
         }));
         setConversations(hrConversations);
         const newConv = hrConversations.find(
-          (c: any) =>
+          (c) =>
             c.candidate_user_id === selectedConversation.candidate_user_id
         );
         if (newConv) {
@@ -552,9 +552,9 @@ function HRMessagesContent() {
           )
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to send message:", err);
-      const errorMsg = err?.message || "Failed to send message";
+      const errorMsg = err instanceof Error ? err.message : "Failed to send message";
       if (errorMsg.includes("Receiver not found")) {
         setSendError(
           "This candidate does not have a portal account. Use email to reach them instead."

@@ -136,10 +136,10 @@ export function useCandidateChat() {
       if (data.title) {
         setTitle(data.title);
       }
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       
-      console.warn('Real backend failed, falling back to mock:', err.message);
+      console.warn('Real backend failed, falling back to mock:', err instanceof Error ? err.message : err);
       setBackendAvailable(false);
       // Fall back to mock response instead of showing error
       await sendMockMessage(content, loadingId);

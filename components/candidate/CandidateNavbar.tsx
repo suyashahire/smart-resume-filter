@@ -77,9 +77,10 @@ function formatTimestamp(date: Date): string {
 
 const navItems = [
   { href: '/candidate', label: 'Home', icon: Home },
-  { href: '/candidate/jobs', label: 'Browse Jobs', icon: Briefcase },
+  { href: '/candidate/jobs', label: 'Discover Jobs', icon: Briefcase },
   { href: '/candidate/applications', label: 'Applications', icon: FileText },
   { href: '/candidate/resume', label: 'Resume', icon: FileBadge },
+  { href: '/candidate/resume/insights', label: 'ATS Panel', icon: Brain },
   { href: '/candidate/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ];
 
@@ -286,6 +287,7 @@ export default function CandidateNavbar() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setShowNotificationPanel(!showNotificationPanel)}
+                  aria-label="Notifications"
                   className="relative p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 >
                   <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -519,6 +521,7 @@ export default function CandidateNavbar() {
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
                 className="lg:hidden p-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

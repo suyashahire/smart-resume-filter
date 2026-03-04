@@ -4,8 +4,9 @@ Interview routes for uploading and analyzing interview recordings.
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
+import logging
 import aiofiles
 
 from app.config import settings
@@ -22,6 +23,7 @@ from app.services.sentiment import get_sentiment_service
 from app.services.websocket_manager import get_connection_manager, EventType
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Use singleton instances for model reuse (pre-loaded at startup)
 transcription_service = get_transcription_service()
@@ -81,7 +83,7 @@ async def upload_interview(
         )
     
     # Generate unique filename
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     safe_filename = f"{timestamp}_{file.filename.replace(' ', '_')}"
     file_path = os.path.join(settings.UPLOAD_DIR, "interviews", safe_filename)
     
@@ -148,7 +150,7 @@ async def transcribe_interview(
         interview.transcript = transcript
         interview.is_transcribed = True
         interview.transcription_error = None
-        interview.updated_at = datetime.utcnow()
+        interview.updated_at = datetime.now(timezone.utc)
         
     except Exception as e:
         interview.is_transcribed = False
@@ -217,7 +219,7 @@ async def analyze_interview(
         interview.analysis = analysis
         interview.is_analyzed = True
         interview.analysis_error = None
-        interview.updated_at = datetime.utcnow()
+        interview.updated_at = datetime.now(timezone.utc)
         
         # Update screening result if exists
         screening_result = await ScreeningResult.find_one(
@@ -317,7 +319,7 @@ async def process_interview(
         interview.analysis = analysis
         interview.is_analyzed = True
         
-        interview.updated_at = datetime.utcnow()
+        interview.updated_at = datetime.now(timezone.utc)
         
         # Update screening result if exists
         screening_result = await ScreeningResult.find_one(
@@ -381,8 +383,6 @@ async def list_interviews(
     
     # Collect resume IDs to batch-lookup candidate info
     resume_ids = list(set(i.resume_id for i in interviews))
-    resumes = await Resume.find({"_id": {"$in": [Resume.get_motor_collection().codec_options.codec.document_class(rid) if False else rid for rid in resume_ids]}}).to_list() if False else []
-    
     # Build resume_id -> resume map
     resume_map = {}
     if resume_ids:
@@ -393,12 +393,12 @@ async def list_interviews(
                 try:
                     object_ids.append(PydanticObjectId(rid))
                 except Exception:
-                    pass
+                    logger.warning("Invalid resume ObjectId: %s", rid)
             if object_ids:
                 resumes = await Resume.find({"_id": {"$in": object_ids}}).to_list()
                 resume_map = {str(r.id): r for r in resumes}
         except Exception:
-            pass
+            logger.exception("Error batch-fetching resumes for interviews")
     
     results = []
     for interview in interviews:

@@ -5,7 +5,7 @@ Job Description model for storing job requirements.
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -46,8 +46,8 @@ class JobDescription(Document):
     company_logo: Optional[str] = None
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "job_descriptions"

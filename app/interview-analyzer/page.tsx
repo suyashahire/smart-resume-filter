@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Video, CheckCircle, TrendingUp, MessageSquare, Cloud, HardDrive, Mic, Brain, ArrowRight, Sparkles, User, BarChart3, FileText, Headphones, Search, Filter, Clock, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import FileUpload from '@/components/ui/FileUpload';
 import { useStore } from '@/store/useStore';
-import { transcribeInterview, analyzeInterview } from '@/lib/mockApi';
+import { transcribeInterview, analyzeInterview } from '@/lib/mockApi'; // offline-mode fallback
 import * as api from '@/lib/api';
 
 interface AnalysisResult {

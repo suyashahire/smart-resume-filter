@@ -5,7 +5,7 @@ Application model for tracking candidate job applications.
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -25,7 +25,7 @@ class StatusChange(BaseModel):
     """Record of a status change for timeline."""
     from_status: Optional[str] = None
     to_status: str
-    changed_at: datetime = Field(default_factory=datetime.utcnow)
+    changed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     changed_by: Optional[str] = None  # User ID who made the change
     note: Optional[str] = None
 
@@ -58,8 +58,8 @@ class Application(Document):
     source: str = Field(default="candidate_portal")  # "candidate_portal" or "hr_upload"
     
     # Timestamps
-    applied_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    applied_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "applications"
@@ -68,6 +68,8 @@ class Application(Document):
             "job_id",
             "status",
             "applied_at",
+            [("candidate_id", 1), ("job_id", 1)],
+            [("job_id", 1), ("status", 1)],
         ]
     
     class Config:

@@ -4,8 +4,6 @@
 #
 # This file overrides the base docker-compose.yml for production deployment
 
-version: '3.8'
-
 services:
   # ===========================================================================
   # MongoDB - Production settings

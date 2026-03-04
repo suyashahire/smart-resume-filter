@@ -40,6 +40,8 @@ import {
   getUnreadCount,
   getSavedJobs,
   type CandidateDashboardStats,
+  type CandidateApplication,
+  type JobDescriptionResponse,
 } from '@/lib/api';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 
@@ -211,12 +213,12 @@ export default function CandidateHomePage() {
   /* ── Derived data ── */
   const stats = {
     total: dashStats?.total ?? applications.length,
-    pending: dashStats?.pending ?? applications.filter((a: any) => a.status === 'applied').length,
-    screening: dashStats?.screening ?? applications.filter((a: any) => a.status === 'screening').length,
-    interview: dashStats?.interview ?? applications.filter((a: any) => a.status === 'interview').length,
-    offers: dashStats?.offers ?? applications.filter((a: any) => a.status === 'offer').length,
-    hired: dashStats?.hired ?? applications.filter((a: any) => a.status === 'hired').length,
-    rejected: dashStats?.rejected ?? applications.filter((a: any) => a.status === 'rejected').length,
+    pending: dashStats?.pending ?? applications.filter((a: CandidateApplication) => a.status === 'applied').length,
+    screening: dashStats?.screening ?? applications.filter((a: CandidateApplication) => a.status === 'screening').length,
+    interview: dashStats?.interview ?? applications.filter((a: CandidateApplication) => a.status === 'interview').length,
+    offers: dashStats?.offers ?? applications.filter((a: CandidateApplication) => a.status === 'offer').length,
+    hired: dashStats?.hired ?? applications.filter((a: CandidateApplication) => a.status === 'hired').length,
+    rejected: dashStats?.rejected ?? applications.filter((a: CandidateApplication) => a.status === 'rejected').length,
   };
 
   const upcomingInterviews = dashStats?.upcoming_interviews ?? [];
@@ -456,7 +458,7 @@ export default function CandidateHomePage() {
 
             {recentApps.length > 0 ? (
               <div className="space-y-3">
-                {recentApps.map((app: any, index: number) => (
+                {recentApps.map((app: CandidateApplication, index: number) => (
                   <motion.div
                     key={app.id || index}
                     initial={{ opacity: 0, x: -20 }}
@@ -510,7 +512,7 @@ export default function CandidateHomePage() {
 
               {upcomingInterviews.length > 0 ? (
                 <div className="space-y-3">
-                  {upcomingInterviews.slice(0, 3).map((interview: any, i: number) => (
+                  {upcomingInterviews.slice(0, 3).map((interview: CandidateDashboardStats['upcoming_interviews'][number], i: number) => (
                     <div key={interview.application_id || i} className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
                       <div className="w-8 h-8 rounded-lg bg-purple-500/10 dark:bg-purple-500/20 flex items-center justify-center flex-shrink-0">
                         <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -579,7 +581,7 @@ export default function CandidateHomePage() {
 
           {recommendedJobs.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {recommendedJobs.map((job: any, i: number) => (
+              {recommendedJobs.map((job: JobDescriptionResponse, i: number) => (
                 <motion.div
                   key={job.id}
                   initial={{ opacity: 0, y: 10 }}

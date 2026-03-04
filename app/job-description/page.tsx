@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Briefcase, Sparkles, Cloud, HardDrive, Zap, ArrowRight, ArrowLeft, FileText, Target, Brain, CheckCircle, Users, ShieldCheck, UserCheck } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { useStore, Job } from '@/store/useStore';
-import { parseJobDescription, screenCandidates } from '@/lib/mockApi';
+import { parseJobDescription, screenCandidates } from '@/lib/mockApi'; // offline-mode fallback
 import * as api from '@/lib/api';
 
 export default function JobDescriptionPage() {

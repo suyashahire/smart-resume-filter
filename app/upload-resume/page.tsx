@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FileText, CheckCircle, AlertCircle, Cloud, HardDrive, Upload, Sparkles, ArrowRight, Zap, Brain, Target, Briefcase, Plus, X, FolderPlus, Users, Play, Edit3 } from 'lucide-react';
 import FileUpload from '@/components/ui/FileUpload';
-import { useStore, Job } from '@/store/useStore';
-import { parseResume } from '@/lib/mockApi';
+import { useStore, Job, Resume } from '@/store/useStore';
+import { parseResume } from '@/lib/mockApi'; // offline-mode fallback
 import * as api from '@/lib/api';
 
 export default function UploadResumePage() {
@@ -71,30 +71,80 @@ export default function UploadResumePage() {
       if (useRealApi && isAuthenticated) {
         setProcessingStatus('Uploading to server...');
         
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          setProcessingStatus(`Processing ${file.name}...`);
-          
+        // Use batch upload when multiple files (max 20 per backend limit)
+        if (files.length > 1 && files.length <= 20) {
+          setProcessingStatus(`Batch uploading ${files.length} files...`);
           try {
-            const response = await api.uploadResume(file);
+            const responses = await api.uploadMultipleResumes(files);
             
-            const resume = {
-              id: response.id,
-              name: response.parsed_data.name || 'Unknown',
-              email: response.parsed_data.email || '',
-              phone: response.parsed_data.phone || '',
-              skills: response.parsed_data.skills || [],
-              education: response.parsed_data.education || '',
-              experience: response.parsed_data.experience || '',
-              score: 0,
-              file
-            };
-
-            addResume(resume);
-            newResumeIds.push(resume.id);
-            setProcessedCount(i + 1);
-          } catch (err) {
-            console.error(`Error processing ${file.name}:`, err);
+            for (let i = 0; i < responses.length; i++) {
+              const response = responses[i];
+              const resume = {
+                id: response.id,
+                name: response.parsed_data.name || 'Unknown',
+                email: response.parsed_data.email || '',
+                phone: response.parsed_data.phone || '',
+                skills: response.parsed_data.skills || [],
+                education: response.parsed_data.education || '',
+                experience: response.parsed_data.experience || '',
+                score: 0,
+                file: files[i]
+              };
+              addResume(resume);
+              newResumeIds.push(resume.id);
+              setProcessedCount(i + 1);
+            }
+          } catch (batchErr) {
+            console.warn('Batch upload failed, falling back to serial:', batchErr);
+            // Fallback to serial upload
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              setProcessingStatus(`Processing ${file.name}...`);
+              try {
+                const response = await api.uploadResume(file);
+                const resume = {
+                  id: response.id,
+                  name: response.parsed_data.name || 'Unknown',
+                  email: response.parsed_data.email || '',
+                  phone: response.parsed_data.phone || '',
+                  skills: response.parsed_data.skills || [],
+                  education: response.parsed_data.education || '',
+                  experience: response.parsed_data.experience || '',
+                  score: 0,
+                  file
+                };
+                addResume(resume);
+                newResumeIds.push(resume.id);
+                setProcessedCount(i + 1);
+              } catch (err) {
+                console.error(`Error processing ${file.name}:`, err);
+              }
+            }
+          }
+        } else {
+          // Single file or >20 — use serial upload
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            setProcessingStatus(`Processing ${file.name}...`);
+            try {
+              const response = await api.uploadResume(file);
+              const resume = {
+                id: response.id,
+                name: response.parsed_data.name || 'Unknown',
+                email: response.parsed_data.email || '',
+                phone: response.parsed_data.phone || '',
+                skills: response.parsed_data.skills || [],
+                education: response.parsed_data.education || '',
+                experience: response.parsed_data.experience || '',
+                score: 0,
+                file
+              };
+              addResume(resume);
+              newResumeIds.push(resume.id);
+              setProcessedCount(i + 1);
+            } catch (err) {
+              console.error(`Error processing ${file.name}:`, err);
+            }
           }
         }
         
@@ -171,7 +221,7 @@ export default function UploadResumePage() {
           
           // Update local store with screening results
           const job = jobs.find(j => j.id === jobId);
-          const newCandidates = screeningResults.map((result: any) => ({
+          const newCandidates = screeningResults.map((result: api.ResumeWithScore) => ({
             id: result.id,
             name: result.name || 'Unknown',
             email: result.email || '',
@@ -186,8 +236,8 @@ export default function UploadResumePage() {
           }));
           
           // Add new candidates to the store (deduplicate by ID)
-          const existingIds = new Set(filteredResumes.map((r: any) => r.id));
-          const uniqueNewCandidates = newCandidates.filter((c: any) => !existingIds.has(c.id));
+          const existingIds = new Set(filteredResumes.map((r: Resume) => r.id));
+          const uniqueNewCandidates = newCandidates.filter((c: Resume) => !existingIds.has(c.id));
           if (uniqueNewCandidates.length > 0) {
             const updatedResumes = [...filteredResumes, ...uniqueNewCandidates];
             setFilteredResumes(updatedResumes);
@@ -195,7 +245,7 @@ export default function UploadResumePage() {
           }
           
           // Also update job assignments
-          screeningResults.forEach((result: any) => {
+          screeningResults.forEach((result: api.ResumeWithScore) => {
             assignCandidateToJob(result.id, jobId, result.score || 0);
           });
         }

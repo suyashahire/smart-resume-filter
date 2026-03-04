@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     DEBUG: bool = False  # Disabled for better performance (no hot-reload overhead)
     ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
     
     # MongoDB Configuration
     MONGODB_URI: str = "mongodb://localhost:27017"
@@ -23,7 +24,8 @@ class Settings(BaseSettings):
     # JWT Configuration
     JWT_SECRET_KEY: str = "your-super-secret-jwt-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (reduced from 24h)
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # AWS S3 Configuration (optional, uses local storage if not configured)
     AWS_ACCESS_KEY_ID: str = ""
@@ -76,6 +78,22 @@ class Settings(BaseSettings):
 
 # Create settings instance
 settings = Settings()
+
+# Validate JWT secret in production
+_INSECURE_SECRETS = {
+    "your-super-secret-jwt-key-change-in-production",
+    "change-this-in-production-minimum-64-characters-long",
+}
+if settings.ENVIRONMENT == "production":
+    if settings.JWT_SECRET_KEY in _INSECURE_SECRETS:
+        raise ValueError(
+            "FATAL: JWT_SECRET_KEY must be changed from its default value in production. "
+            "Set a strong, random secret via the JWT_SECRET_KEY environment variable."
+        )
+    if len(settings.JWT_SECRET_KEY) < 32:
+        raise ValueError(
+            "FATAL: JWT_SECRET_KEY must be at least 32 characters in production."
+        )
 
 # Ensure upload directory exists
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)

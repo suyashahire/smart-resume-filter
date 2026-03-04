@@ -5,7 +5,7 @@ Resume model for storing parsed resume data.
 from beanie import Document, Link
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ParsedResumeData(BaseModel):
@@ -47,8 +47,8 @@ class Resume(Document):
     parse_error: Optional[str] = None
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "resumes"

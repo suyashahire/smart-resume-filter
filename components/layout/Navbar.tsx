@@ -338,6 +338,7 @@ export default function Navbar() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setShowNotificationPanel(!showNotificationPanel)}
+                    aria-label="Notifications"
                     className="relative p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -385,6 +386,7 @@ export default function Navbar() {
                             )}
                             <button
                               onClick={() => setShowNotificationPanel(false)}
+                              aria-label="Close notifications"
                               className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                             >
                               <X className="h-4 w-4 text-gray-500" />
@@ -462,6 +464,7 @@ export default function Navbar() {
                                           try { await api.deleteNotification(dbId); } catch (e) { console.error('Failed to delete notification:', e); }
                                           dismissNotification(notification.id);
                                         }}
+                                        aria-label="Dismiss notification"
                                         className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
                                       >
                                         <X className="h-3 w-3 text-gray-400" />
@@ -594,6 +597,7 @@ export default function Navbar() {
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
+                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
                 className="lg:hidden p-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

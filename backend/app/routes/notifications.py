@@ -9,7 +9,9 @@ from app.models.notification import (
     Notification,
     NotificationResponse,
     NotificationListResponse,
+    NotificationType,
 )
+from app.models.application import Application, ApplicationStatus
 from app.models.user import User
 from app.routes.auth import get_current_user
 
@@ -50,14 +52,38 @@ async def get_notifications(
         .to_list()
     )
 
+    # Auto-clean stale approval notifications whose applications have already been processed
+    clean_notifications = []
+    stale_ids = []
+    for n in notifications:
+        n_type = n.type.value if hasattr(n.type, 'value') else str(n.type)
+        if n_type == 'application_approval_required' and n.application_id:
+            try:
+                app = await Application.get(n.application_id)
+                if not app or app.status != ApplicationStatus.PENDING_APPROVAL:
+                    stale_ids.append(n.id)
+                    continue
+            except Exception:
+                stale_ids.append(n.id)
+                continue
+        clean_notifications.append(n)
+
+    # Delete stale notifications in background
+    if stale_ids:
+        try:
+            from beanie import PydanticObjectId
+            await Notification.find({"_id": {"$in": [PydanticObjectId(str(sid)) for sid in stale_ids]}}).delete()
+        except Exception:
+            pass
+
     unread_count = await Notification.find({
         "recipient_id": str(current_user.id),
         "is_read": False,
     }).count()
 
     return NotificationListResponse(
-        notifications=[_to_response(n) for n in notifications],
-        total=len(notifications),
+        notifications=[_to_response(n) for n in clean_notifications],
+        total=len(clean_notifications),
         unread_count=unread_count,
     )
 

@@ -5,7 +5,7 @@ Interview model for storing interview analysis data.
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SentimentAnalysis(BaseModel):
@@ -49,8 +49,8 @@ class Interview(Document):
     analysis_error: Optional[str] = None
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     class Settings:
         name = "interviews"

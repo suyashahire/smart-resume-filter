@@ -3,7 +3,7 @@ Report Generator Service - Generate PDF reports for candidates.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 import asyncio
 
@@ -28,7 +28,7 @@ class ReportGeneratorService:
             Path to the generated PDF file
         """
         # Generate filename
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         candidate_name = report_data.get("name", "Unknown").replace(" ", "_")
         filename = f"report_{candidate_name}_{timestamp}.pdf"
         filepath = os.path.join(self.reports_dir, filename)
@@ -207,7 +207,7 @@ class ReportGeneratorService:
                 textColor=colors.gray
             )
             story.append(Paragraph(
-                f"Generated on: {data.get('generated_at', datetime.utcnow().isoformat())}", 
+                f"Generated on: {data.get('generated_at', datetime.now(timezone.utc).isoformat())}", 
                 footer_style
             ))
             story.append(Paragraph(

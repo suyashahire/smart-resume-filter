@@ -5,8 +5,9 @@ Resume routes for uploading, parsing, and managing resumes.
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status
 from fastapi.responses import FileResponse
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import os
+import re
 import aiofiles
 
 from app.config import settings
@@ -58,9 +59,11 @@ async def upload_resume(
             detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE_MB}MB"
         )
     
-    # Generate unique filename
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    safe_filename = f"{timestamp}_{file.filename.replace(' ', '_')}"
+    # Generate unique filename (sanitized against path traversal)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    base_name = os.path.basename(file.filename)
+    sanitized_name = re.sub(r'[^\w.\-]', '_', base_name)
+    safe_filename = f"{timestamp}_{sanitized_name}"
     file_path = os.path.join(settings.UPLOAD_DIR, "resumes", safe_filename)
     
     # Save file locally
@@ -147,7 +150,7 @@ async def upload_multiple_resumes(
                 continue
             
             # Generate unique filename
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             safe_filename = f"{timestamp}_{file.filename.replace(' ', '_')}"
             file_path = os.path.join(settings.UPLOAD_DIR, "resumes", safe_filename)
             
@@ -376,7 +379,7 @@ async def reparse_resume(
         resume.raw_text = raw_text
         resume.is_parsed = True
         resume.parse_error = None
-        resume.updated_at = datetime.utcnow()
+        resume.updated_at = datetime.now(timezone.utc)
         
     except Exception as e:
         resume.is_parsed = False

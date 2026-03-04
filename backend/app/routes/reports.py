@@ -5,7 +5,7 @@ Reports routes for generating and downloading candidate reports.
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import FileResponse
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 from app.config import settings
@@ -20,45 +20,6 @@ router = APIRouter()
 
 # Initialize report generator
 report_generator = ReportGeneratorService()
-
-
-class CandidateReport:
-    """Candidate report data structure."""
-    def __init__(
-        self,
-        candidate_id: str,
-        name: str,
-        email: str,
-        phone: str,
-        skills: list,
-        education: str,
-        experience: str,
-        resume_score: float,
-        sentiment_score: Optional[float],
-        confidence_score: Optional[float],
-        final_score: float,
-        recommendation: str,
-        skill_matches: list,
-        transcript: Optional[str],
-        job_title: str,
-        generated_at: datetime
-    ):
-        self.candidate_id = candidate_id
-        self.name = name
-        self.email = email
-        self.phone = phone
-        self.skills = skills
-        self.education = education
-        self.experience = experience
-        self.resume_score = resume_score
-        self.sentiment_score = sentiment_score
-        self.confidence_score = confidence_score
-        self.final_score = final_score
-        self.recommendation = recommendation
-        self.skill_matches = skill_matches
-        self.transcript = transcript
-        self.job_title = job_title
-        self.generated_at = generated_at
 
 
 @router.get("/{resume_id}")
@@ -170,7 +131,7 @@ async def get_candidate_report(
         "transcript": transcript,
         "job_title": job_title,
         "has_interview": interview is not None and interview.is_analyzed,
-        "generated_at": datetime.utcnow().isoformat()
+        "generated_at": datetime.now(timezone.utc).isoformat()
     }
 
 

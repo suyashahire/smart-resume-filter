@@ -12,7 +12,7 @@ import {
   Briefcase,
   Search
 } from 'lucide-react';
-import { getJobSpecificATS, JobSpecificATS, getOpenJobs } from '@/lib/api';
+import { getJobSpecificATS, JobSpecificATS, SkillMatchEntry, getOpenJobs } from '@/lib/api';
 
 const CARD_CLASS =
   'rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-sm';
@@ -54,7 +54,7 @@ export default function JobATSChecker({ resumeId }: JobATSCheckerProps) {
     setLoadingJobs(true);
     getOpenJobs()
       .then((result) => {
-        const jobList = (result || []).map((j: any) => ({
+        const jobList = (result || []).map((j: import('@/lib/api').JobDescriptionResponse) => ({
           id: j.id,
           title: j.title,
           company: j.company,
@@ -80,8 +80,8 @@ export default function JobATSChecker({ resumeId }: JobATSCheckerProps) {
     try {
       const data = await getJobSpecificATS(resumeId, jobId);
       setAtsData(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to check ATS compatibility');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to check ATS compatibility');
       setAtsData(null);
     } finally {
       setLoadingATS(false);
@@ -304,24 +304,37 @@ export default function JobATSChecker({ resumeId }: JobATSCheckerProps) {
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {atsData.required_skills.matched.map((skill) => (
-                  <span
-                    key={skill}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                  >
-                    <CheckCircle2 className="h-3 w-3" />
-                    {skill}
-                  </span>
-                ))}
-                {atsData.required_skills.missing.map((skill) => (
-                  <span
-                    key={skill}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                  >
-                    <XCircle className="h-3 w-3" />
-                    {skill}
-                  </span>
-                ))}
+                {atsData.required_skills.matched.map((entry) => {
+                  const skill = typeof entry === 'string' ? entry : (entry as SkillMatchEntry).skill;
+                  const matchType = typeof entry === 'string' ? 'exact' : (entry as SkillMatchEntry).match_type;
+                  const isPartial = matchType !== 'exact';
+                  return (
+                    <span
+                      key={skill}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${
+                        isPartial
+                          ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
+                          : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      }`}
+                      title={isPartial ? `${matchType} match` : 'Exact match'}
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      {skill}
+                    </span>
+                  );
+                })}
+                {atsData.required_skills.missing.map((entry) => {
+                  const skill = typeof entry === 'string' ? entry : (entry as SkillMatchEntry).skill;
+                  return (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    >
+                      <XCircle className="h-3 w-3" />
+                      {skill}
+                    </span>
+                  );
+                })}
               </div>
             </div>
 
@@ -337,23 +350,29 @@ export default function JobATSChecker({ resumeId }: JobATSCheckerProps) {
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {atsData.preferred_skills.matched.map((skill) => (
-                    <span
-                      key={skill}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      {skill}
-                    </span>
-                  ))}
-                  {atsData.preferred_skills.missing.map((skill) => (
-                    <span
-                      key={skill}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400"
-                    >
-                      {skill}
-                    </span>
-                  ))}
+                  {atsData.preferred_skills.matched.map((entry) => {
+                    const skill = typeof entry === 'string' ? entry : (entry as SkillMatchEntry).skill;
+                    return (
+                      <span
+                        key={skill}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        {skill}
+                      </span>
+                    );
+                  })}
+                  {atsData.preferred_skills.missing.map((entry) => {
+                    const skill = typeof entry === 'string' ? entry : (entry as SkillMatchEntry).skill;
+                    return (
+                      <span
+                        key={skill}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400"
+                      >
+                        {skill}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}

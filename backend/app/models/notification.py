@@ -5,7 +5,7 @@ Notification model for HR alerts (e.g., new candidate applications).
 from beanie import Document
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -40,7 +40,7 @@ class Notification(Document):
     is_read: bool = Field(default=False)
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "notifications"

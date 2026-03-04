@@ -3,14 +3,16 @@ Admin routes for user management and approval.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, Query
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
+import re as re_module
 
 from app.models.user import (
     User, UserRole, AccountStatus, 
     UserListResponse, ApproveUserRequest, RejectUserRequest
 )
 from app.routes.auth import get_current_user, require_admin
+from app.services.email import get_email_service
 
 router = APIRouter()
 
@@ -54,14 +56,15 @@ async def get_all_users(
                 detail=f"Invalid account_status: {account_status}"
             )
     
-    users = await User.find(query).skip(skip).limit(limit).to_list()
-    
-    # Filter by search if provided
+    # Apply search filter at DB level before pagination
     if search:
-        search_lower = search.lower()
-        users = [u for u in users if 
-                search_lower in u.name.lower() or 
-                search_lower in u.email.lower()]
+        search_regex = re_module.escape(search)
+        query["$or"] = [
+            {"name": {"$regex": search_regex, "$options": "i"}},
+            {"email": {"$regex": search_regex, "$options": "i"}},
+        ]
+    
+    users = await User.find(query).skip(skip).limit(limit).to_list()
     
     return [
         UserListResponse(
@@ -167,12 +170,17 @@ async def approve_user(
     user.account_status = AccountStatus.APPROVED
     user.is_active = True
     user.approved_by = str(current_user.id)
-    user.approved_at = datetime.utcnow()
-    user.updated_at = datetime.utcnow()
+    user.approved_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc)
     
     await user.save()
     
-    # TODO: Send email notification to user
+    # Send email notification to user
+    try:
+        email_service = get_email_service()
+        await email_service.send_account_approved(user.email, user.name)
+    except Exception as e:
+        print(f"⚠️ Failed to send approval email: {e}")
     
     return {
         "message": "User approved successfully",
@@ -214,11 +222,16 @@ async def reject_user(
     user.account_status = AccountStatus.REJECTED
     user.is_active = False
     user.rejection_reason = request.reason
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     
     await user.save()
     
-    # TODO: Send email notification to user
+    # Send email notification to user
+    try:
+        email_service = get_email_service()
+        await email_service.send_account_rejected(user.email, user.name, request.reason)
+    except Exception as e:
+        print(f"⚠️ Failed to send rejection email: {e}")
     
     return {
         "message": "User rejected",
@@ -258,7 +271,7 @@ async def toggle_user_active(
         )
     
     user.is_active = not user.is_active
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     
     await user.save()
     

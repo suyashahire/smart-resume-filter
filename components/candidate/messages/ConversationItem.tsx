@@ -5,7 +5,7 @@ import { Trash2, Briefcase } from 'lucide-react';
 import type { ChatConversation } from '@/store/useStore';
 
 function getDisplayName(c: ChatConversation): string {
-  return c.other_user?.name ?? (c as any).hr_user_name ?? 'Recruiter';
+  return c.other_user?.name ?? c.hr_user_name ?? 'Recruiter';
 }
 
 interface ConversationItemProps {

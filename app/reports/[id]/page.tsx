@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -17,9 +17,10 @@ import * as api from '@/lib/api';
 
 export default function CandidateReportPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { filteredResumes, interviews, jobDescription, getInterviewByCandidate, useRealApi, isAuthenticated } = useStore();
+  const { filteredResumes, interviews, jobDescription, getInterviewByCandidate, useRealApi, isAuthenticated, addInterview } = useStore();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isViewingResume, setIsViewingResume] = useState(false);
+  const [isLoadingInterview, setIsLoadingInterview] = useState(false);
 
   const candidate = useMemo(() => {
     return filteredResumes.find(r => r.id === params.id);
@@ -28,6 +29,35 @@ export default function CandidateReportPage({ params }: { params: { id: string }
   const interview = useMemo(() => {
     return getInterviewByCandidate(params.id);
   }, [interviews, params.id]);
+
+  // Fetch interview from API if not in store
+  useEffect(() => {
+    if (interview || !useRealApi || !isAuthenticated || !params.id) return;
+    
+    let cancelled = false;
+    setIsLoadingInterview(true);
+    
+    api.getInterviewByResume(params.id)
+      .then((data) => {
+        if (!cancelled && data) {
+          addInterview({
+            id: data.id,
+            candidateId: data.resume_id,
+            transcript: data.transcript || '',
+            sentimentScore: data.analysis?.sentiment_score ?? 0,
+            confidenceScore: data.analysis?.confidence_score ?? 0,
+          });
+        }
+      })
+      .catch(() => {
+        // No interview exists for this candidate — that's fine
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingInterview(false);
+      });
+    
+    return () => { cancelled = true; };
+  }, [interview, useRealApi, isAuthenticated, params.id]);
 
   const finalScore = useMemo(() => {
     if (!candidate) return 0;

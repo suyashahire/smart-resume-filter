@@ -4,7 +4,7 @@ Chat API routes for the AI chatbot.
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.conversation import (
     Conversation, ChatMessage, MessageRole,
@@ -53,7 +53,7 @@ async def send_message(
     user_msg = ChatMessage(
         role=MessageRole.USER,
         content=request.message,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     conversation.messages.append(user_msg)
     
@@ -74,7 +74,7 @@ async def send_message(
     assistant_msg = ChatMessage(
         role=MessageRole.ASSISTANT,
         content=result["response"],
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={
             "model": result.get("model", "unknown"),
             "rag_used": result.get("rag_used", False),
@@ -89,7 +89,7 @@ async def send_message(
         conversation.title = await chatbot.generate_title(request.message)
     
     # Save conversation
-    conversation.updated_at = datetime.utcnow()
+    conversation.updated_at = datetime.now(timezone.utc)
     await conversation.save()
     
     return ChatResponse(
@@ -194,7 +194,7 @@ async def delete_conversation(
         raise HTTPException(status_code=403, detail="Access denied")
     
     conversation.is_active = False
-    conversation.updated_at = datetime.utcnow()
+    conversation.updated_at = datetime.now(timezone.utc)
     await conversation.save()
     
     return {"message": "Conversation deleted"}

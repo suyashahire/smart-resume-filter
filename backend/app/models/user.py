@@ -3,10 +3,11 @@ User model for authentication and authorization.
 """
 
 from beanie import Document
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
+import re
 
 
 class UserRole(str, Enum):
@@ -47,11 +48,23 @@ class User(Document):
     approved_by: Optional[str] = None  # Admin user ID who approved
     approved_at: Optional[datetime] = None
     
+    # Candidate profile fields
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    title: Optional[str] = None
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    experience_years: Optional[int] = None
+    education: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    
     # Saved/bookmarked jobs (for candidates)
     saved_jobs: List[str] = Field(default_factory=list)
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
     
     class Settings:
@@ -80,9 +93,18 @@ class UserCreate(BaseModel):
     """Schema for creating a new user."""
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
     role: UserRole = UserRole.HR_MANAGER
     company: Optional[str] = None
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if not re.search(r'[A-Za-z]', v):
+            raise ValueError('Password must contain at least one letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 
 class UserLogin(BaseModel):
@@ -148,6 +170,21 @@ class UserListResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class CandidateProfileUpdate(BaseModel):
+    """Schema for updating candidate profile."""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    title: Optional[str] = None
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    experience_years: Optional[int] = None
+    education: Optional[str] = None
+    skills: Optional[List[str]] = None
 
 
 class ApproveUserRequest(BaseModel):

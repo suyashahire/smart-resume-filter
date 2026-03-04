@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Disabled in development for better performance (prevents double-renders)
-  // Enable in production for better debugging
-  reactStrictMode: false,
+  reactStrictMode: true,
   
   // Optimize for faster builds
   swcMinify: true,
@@ -13,6 +11,21 @@ const nextConfig = {
   // Reduce bundle size by excluding large dependencies from client
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],
+  },
+
+  // Security headers
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        ],
+      },
+    ];
   },
 }
 

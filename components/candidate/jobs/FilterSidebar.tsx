@@ -20,6 +20,7 @@ export interface JobFilters {
   experience: string;
   workMode: string; // 'all' | 'remote' | 'onsite'
   salaryRange: string;
+  savedOnly?: boolean;
 }
 
 const JOB_TYPES = [
@@ -44,6 +45,7 @@ interface FilterSidebarProps {
   salaryOptions: string[];
   hasActiveFilters: boolean;
   onClearFilters: () => void;
+  savedCount?: number;
   className?: string;
 }
 
@@ -127,6 +129,7 @@ export default function FilterSidebar({
   salaryOptions,
   hasActiveFilters,
   onClearFilters,
+  savedCount = 0,
   className = '',
 }: FilterSidebarProps) {
   const update = (key: keyof JobFilters, value: string) => {
@@ -139,6 +142,7 @@ export default function FilterSidebar({
     filters.experience,
     filters.workMode !== 'all' ? filters.workMode : '',
     filters.salaryRange,
+    filters.savedOnly ? 'saved' : '',
   ].filter(Boolean).length;
 
   return (
@@ -267,6 +271,33 @@ export default function FilterSidebar({
               </div>
             </FilterSection>
           )}
+
+          {/* Saved Jobs */}
+          <FilterSection title="Saved" icon={Briefcase} defaultOpen={false}>
+            <button
+              type="button"
+              onClick={() => onChange({ ...filters, savedOnly: !filters.savedOnly })}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                filters.savedOnly
+                  ? 'bg-candidate-500/10 dark:bg-candidate-500/20 text-candidate-600 dark:text-candidate-400 border border-candidate-500/25 dark:border-candidate-500/35'
+                  : 'bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/60 border border-gray-100 dark:border-gray-700/40'
+              }`}
+            >
+              <span>Show saved only</span>
+              <span className="flex items-center gap-2">
+                {savedCount > 0 && (
+                  <span className="text-xs opacity-70">{savedCount}</span>
+                )}
+                <span className={`w-8 h-5 rounded-full relative transition-colors duration-200 ${
+                  filters.savedOnly ? 'bg-candidate-500' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    filters.savedOnly ? 'translate-x-3.5' : 'translate-x-0.5'
+                  }`} />
+                </span>
+              </span>
+            </button>
+          </FilterSection>
         </div>
       </div>
     </div>

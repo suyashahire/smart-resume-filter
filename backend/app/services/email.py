@@ -408,6 +408,60 @@ class HireQEmailService:
             html=self._wrap_template(content)
         )
     
+    async def send_account_approved(self, to: str, name: str) -> bool:
+        """Send account approved notification email."""
+        content = f"""
+        <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Account Approved! 🎉</h2>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Hi {name},
+        </p>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Great news! Your HireQ account has been approved by our admin team. You now have full access to the platform.
+        </p>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            <strong>What you can do now:</strong>
+        </p>
+        <ul style="color: #4b5563; font-size: 16px; line-height: 1.8; margin: 0 0 30px 0; padding-left: 20px;">
+            <li>Post and manage job listings</li>
+            <li>Screen candidate resumes with AI</li>
+            <li>Track applications and interviews</li>
+        </ul>
+        <a href="{self.frontend_url}/dashboard" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+            Go to Dashboard
+        </a>
+        """
+        
+        return await self.provider.send_email(
+            to=to,
+            subject="Your HireQ Account is Approved! 🎉",
+            html=self._wrap_template(content)
+        )
+    
+    async def send_account_rejected(self, to: str, name: str, reason: str) -> bool:
+        """Send account rejected notification email."""
+        content = f"""
+        <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Account Update</h2>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Hi {name},
+        </p>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Thank you for your interest in HireQ. After reviewing your account request, our admin team was unable to approve it at this time.
+        </p>
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; margin: 0 0 30px 0; border-radius: 0 8px 8px 0;">
+            <p style="color: #ef4444; font-size: 14px; margin: 0 0 5px 0; font-weight: 600;">Reason</p>
+            <p style="color: #374151; font-size: 16px; margin: 0;">{reason}</p>
+        </div>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            If you believe this was a mistake or have questions, please contact our support team.
+        </p>
+        """
+        
+        return await self.provider.send_email(
+            to=to,
+            subject="HireQ Account Update",
+            html=self._wrap_template(content)
+        )
+    
     async def send_password_reset(self, to: str, name: str, reset_link: str) -> bool:
         """Send password reset email."""
         content = f"""
