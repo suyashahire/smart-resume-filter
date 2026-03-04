@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Video, CheckCircle, TrendingUp, MessageSquare, Cloud, HardDrive, Mic, Brain, ArrowRight, Sparkles, User, BarChart3, FileText, Headphones } from 'lucide-react';
+import { Video, CheckCircle, TrendingUp, MessageSquare, Cloud, HardDrive, Mic, Brain, ArrowRight, Sparkles, User, BarChart3, FileText, Headphones, Search, Filter, Clock, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import FileUpload from '@/components/ui/FileUpload';
 import { useStore } from '@/store/useStore';
 import { transcribeInterview, analyzeInterview } from '@/lib/mockApi';
@@ -32,6 +32,13 @@ function InterviewAnalyzerContent() {
   const [transcript, setTranscript] = useState('');
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [interviewId, setInterviewId] = useState<string | null>(null);
+  
+  // Past Interviews state
+  const [pastInterviews, setPastInterviews] = useState<api.InterviewListItem[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [interviewSearch, setInterviewSearch] = useState('');
+  const [scoreFilter, setScoreFilter] = useState<string>('all');
+  const [showPastInterviews, setShowPastInterviews] = useState(true);
 
   const candidateList = filteredResumes.length > 0 ? filteredResumes : resumes;
 
@@ -40,6 +47,29 @@ function InterviewAnalyzerContent() {
       setSelectedCandidate(candidateId);
     }
   }, [candidateId]);
+
+  const fetchPastInterviews = useCallback(async () => {
+    if (!useRealApi || !isAuthenticated) return;
+    setPastLoading(true);
+    try {
+      const params: Parameters<typeof api.getInterviews>[0] = {};
+      if (interviewSearch.trim()) params.search = interviewSearch.trim();
+      if (scoreFilter === 'excellent') { params.min_score = 75; }
+      else if (scoreFilter === 'good') { params.min_score = 60; params.max_score = 74; }
+      else if (scoreFilter === 'fair') { params.min_score = 45; params.max_score = 59; }
+      else if (scoreFilter === 'low') { params.max_score = 44; }
+      const data = await api.getInterviews(params);
+      setPastInterviews(data || []);
+    } catch (err) {
+      console.error('Failed to load past interviews:', err);
+    } finally {
+      setPastLoading(false);
+    }
+  }, [useRealApi, isAuthenticated, interviewSearch, scoreFilter]);
+
+  useEffect(() => {
+    fetchPastInterviews();
+  }, [fetchPastInterviews]);
 
   const handleFilesSelected = (selectedFiles: File[]) => {
     setFiles(selectedFiles);
@@ -513,6 +543,7 @@ function InterviewAnalyzerContent() {
                   setTranscript('');
                   setAnalysis(null);
                   setInterviewId(null);
+                  fetchPastInterviews();
                 }}
                 className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
@@ -539,6 +570,176 @@ function InterviewAnalyzerContent() {
                 </motion.button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+
+        {/* ═══ PAST INTERVIEWS ═══ */}
+        {useRealApi && isAuthenticated && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-10"
+          >
+            <button
+              type="button"
+              onClick={() => setShowPastInterviews(v => !v)}
+              className="w-full flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Past Interviews</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {pastInterviews.length} interview{pastInterviews.length !== 1 ? 's' : ''} recorded
+                  </p>
+                </div>
+              </div>
+              {showPastInterviews
+                ? <ChevronUp className="h-5 w-5 text-gray-400" />
+                : <ChevronDown className="h-5 w-5 text-gray-400" />
+              }
+            </button>
+
+            <AnimatePresence>
+              {showPastInterviews && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  {/* Filters */}
+                  <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by candidate name or file..."
+                        value={interviewSearch}
+                        onChange={(e) => setInterviewSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <select
+                        value={scoreFilter}
+                        onChange={(e) => setScoreFilter(e.target.value)}
+                        className="pl-10 pr-8 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="all">All Scores</option>
+                        <option value="excellent">Excellent (75+)</option>
+                        <option value="good">Good (60-74)</option>
+                        <option value="fair">Fair (45-59)</option>
+                        <option value="low">Needs Work (&lt;45)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Interview List */}
+                  <div className="mt-4 space-y-3">
+                    {pastLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : pastInterviews.length === 0 ? (
+                      <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
+                        <Video className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          {interviewSearch || scoreFilter !== 'all' ? 'No interviews match your filters' : 'No interviews recorded yet'}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          Upload and analyze an interview to see it here
+                        </p>
+                      </div>
+                    ) : (
+                      pastInterviews.map((interview, i) => {
+                        const sentimentColor =
+                          interview.sentiment_score >= 75 ? 'from-green-500 to-emerald-600' :
+                          interview.sentiment_score >= 60 ? 'from-blue-500 to-cyan-600' :
+                          interview.sentiment_score >= 45 ? 'from-amber-500 to-orange-600' :
+                          'from-red-500 to-rose-600';
+                        const confidenceColor =
+                          interview.confidence_score >= 75 ? 'from-green-500 to-emerald-600' :
+                          interview.confidence_score >= 60 ? 'from-blue-500 to-cyan-600' :
+                          interview.confidence_score >= 45 ? 'from-amber-500 to-orange-600' :
+                          'from-red-500 to-rose-600';
+                        const date = new Date(interview.created_at);
+                        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                        return (
+                          <motion.div
+                            key={interview.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.04 }}
+                            className="group bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 hover:border-cyan-300 dark:hover:border-cyan-700 hover:shadow-md transition-all"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="flex items-start gap-3 min-w-0 flex-1">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/30 dark:to-blue-900/30 flex items-center justify-center">
+                                  <Mic className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                    {interview.candidate_name || interview.file_name}
+                                  </p>
+                                  {interview.candidate_email && (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{interview.candidate_email}</p>
+                                  )}
+                                  <div className="flex items-center gap-3 mt-1.5">
+                                    <span className="text-[11px] text-gray-400 dark:text-gray-500">{dateStr}</span>
+                                    {interview.is_analyzed ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-green-600 dark:text-green-400">
+                                        <CheckCircle className="h-2.5 w-2.5" /> Analyzed
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                                        Pending
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4 flex-shrink-0">
+                                {interview.is_analyzed && (
+                                  <div className="flex items-center gap-4">
+                                    <div className="text-center">
+                                      <p className={`text-lg font-bold bg-gradient-to-r ${sentimentColor} bg-clip-text text-transparent`}>
+                                        {interview.sentiment_score}%
+                                      </p>
+                                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Sentiment</p>
+                                    </div>
+                                    <div className="text-center">
+                                      <p className={`text-lg font-bold bg-gradient-to-r ${confidenceColor} bg-clip-text text-transparent`}>
+                                        {interview.confidence_score}%
+                                      </p>
+                                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Confidence</p>
+                                    </div>
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/reports/${interview.resume_id}`)}
+                                  className="p-2 rounded-lg text-gray-400 hover:text-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
+                                  title="View report"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </div>

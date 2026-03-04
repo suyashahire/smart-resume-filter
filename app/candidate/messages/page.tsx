@@ -6,6 +6,7 @@ import { Trash2 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import * as api from '@/lib/api';
+import { MessagesSkeleton } from '@/components/ui/Skeleton';
 import type { ChatConversation } from '@/store/useStore';
 import { ConversationList, ChatWindow } from '@/components/candidate/messages';
 
@@ -29,6 +30,8 @@ export default function CandidateMessagesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const selectedConversationRef = useRef<ChatConversation | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
 
   // Keep ref in sync for WebSocket callback
   useEffect(() => {
@@ -39,7 +42,7 @@ export default function CandidateMessagesPage() {
   useRealtimeUpdates({
     userId: user?.id,
     enabled: !!user?.id,
-    onEvent: useCallback((event) => {
+    onEvent: useCallback((event: any) => {
       if (event.type === 'new_message') {
         const data = event.data as any;
         const currentConv = selectedConversationRef.current;
@@ -52,6 +55,26 @@ export default function CandidateMessagesPage() {
         api.getConversations().then(res => {
           setConversations(res.conversations || []);
         }).catch(() => {});
+      }
+
+      // Typing indicator events
+      if (event.type === 'typing_started' || event.type === 'typing_stopped') {
+        const data = event.data as any;
+        const currentConv = selectedConversationRef.current;
+        if (currentConv && data.conversation_id === currentConv.id) {
+          setShowTypingIndicator(event.type === 'typing_started');
+        }
+      }
+
+      // Read receipts — update check marks in real-time
+      if (event.type === 'messages_read') {
+        const data = event.data as any;
+        const currentConv = selectedConversationRef.current;
+        if (currentConv && data.conversation_id === currentConv.id) {
+          api.getConversationMessages(currentConv.id).then(res => {
+            setCurrentConversationMessages(res.messages || []);
+          }).catch(() => {});
+        }
       }
     }, [setConversations, setCurrentConversationMessages]),
   });
@@ -181,6 +204,10 @@ export default function CandidateMessagesPage() {
     0
   );
 
+  if (isLoading) {
+    return <MessagesSkeleton />;
+  }
+
   return (
     <div className="min-h-[calc(100vh-140px)] flex flex-col">
       <div className="fixed inset-0 bg-gray-100 dark:bg-gray-950 -z-10" />
@@ -227,8 +254,32 @@ export default function CandidateMessagesPage() {
               messages={currentConversationMessages}
               currentUserId={user?.id}
               newMessage={newMessage}
-              onNewMessageChange={setNewMessage}
-              onSendMessage={handleSendMessage}
+              onNewMessageChange={(val) => {
+                setNewMessage(val);
+                // Emit typing indicator with debounce
+                if (selectedConversation) {
+                  if (!isTypingRef.current) {
+                    isTypingRef.current = true;
+                    api.sendTypingIndicator(selectedConversation.id, true).catch(() => {});
+                  }
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  typingTimeoutRef.current = setTimeout(() => {
+                    isTypingRef.current = false;
+                    if (selectedConversation) {
+                      api.sendTypingIndicator(selectedConversation.id, false).catch(() => {});
+                    }
+                  }, 2000);
+                }
+              }}
+              onSendMessage={(e) => {
+                // Stop typing indicator on send
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                if (isTypingRef.current && selectedConversation) {
+                  isTypingRef.current = false;
+                  api.sendTypingIndicator(selectedConversation.id, false).catch(() => {});
+                }
+                handleSendMessage(e);
+              }}
               isSending={isSending}
               onBack={() => setSelectedConversation(null)}
               formatTime={formatTime}

@@ -30,7 +30,7 @@ export default function MessageBubble({ message, isOwn, formatTime }: MessageBub
           isOwn ? 'text-white/60' : 'text-gray-400 dark:text-gray-500'
         }`}>
           <span className="text-[10px]">
-            {formatTime(message.created_at ?? message.timestamp)}
+            {formatTime(message.created_at ?? message.timestamp ?? message.sent_at)}
           </span>
           {isOwn && (
             message.is_read

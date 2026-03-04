@@ -109,6 +109,8 @@ class InterviewListResponse(BaseModel):
     id: str
     resume_id: str
     file_name: str
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
     sentiment_score: float
     confidence_score: float
     is_analyzed: bool

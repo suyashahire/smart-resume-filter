@@ -2,8 +2,8 @@
 Interview routes for uploading and analyzing interview recordings.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status
-from typing import List
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query
+from typing import List, Optional
 from datetime import datetime
 import os
 import aiofiles
@@ -363,25 +363,78 @@ async def process_interview(
 async def list_interviews(
     skip: int = 0,
     limit: int = 50,
+    search: Optional[str] = Query(None, description="Search by candidate name or email"),
+    min_score: Optional[float] = Query(None, description="Minimum sentiment score"),
+    max_score: Optional[float] = Query(None, description="Maximum sentiment score"),
+    analyzed_only: bool = Query(False, description="Only return analyzed interviews"),
     current_user: User = Depends(get_current_user)
 ):
-    """List all interviews uploaded by the current user."""
-    interviews = await Interview.find(
-        Interview.user_id == str(current_user.id)
-    ).skip(skip).limit(limit).sort(-Interview.created_at).to_list()
+    """List all interviews uploaded by the current user with optional filters."""
+    query = {"user_id": str(current_user.id)}
     
-    return [
-        InterviewListResponse(
+    if analyzed_only:
+        query["is_analyzed"] = True
+    
+    interviews = await Interview.find(
+        query
+    ).sort(-Interview.created_at).to_list()
+    
+    # Collect resume IDs to batch-lookup candidate info
+    resume_ids = list(set(i.resume_id for i in interviews))
+    resumes = await Resume.find({"_id": {"$in": [Resume.get_motor_collection().codec_options.codec.document_class(rid) if False else rid for rid in resume_ids]}}).to_list() if False else []
+    
+    # Build resume_id -> resume map
+    resume_map = {}
+    if resume_ids:
+        try:
+            from beanie import PydanticObjectId
+            object_ids = []
+            for rid in resume_ids:
+                try:
+                    object_ids.append(PydanticObjectId(rid))
+                except Exception:
+                    pass
+            if object_ids:
+                resumes = await Resume.find({"_id": {"$in": object_ids}}).to_list()
+                resume_map = {str(r.id): r for r in resumes}
+        except Exception:
+            pass
+    
+    results = []
+    for interview in interviews:
+        resume = resume_map.get(interview.resume_id)
+        candidate_name = resume.candidate_name if resume and hasattr(resume, 'candidate_name') else None
+        candidate_email = resume.candidate_email if resume and hasattr(resume, 'candidate_email') else None
+        
+        # Search filter
+        if search:
+            search_lower = search.lower()
+            name_match = candidate_name and search_lower in candidate_name.lower()
+            email_match = candidate_email and search_lower in candidate_email.lower()
+            file_match = search_lower in interview.file_name.lower()
+            if not (name_match or email_match or file_match):
+                continue
+        
+        # Score filters
+        sentiment = interview.analysis.sentiment_score if interview.analysis else 0
+        if min_score is not None and sentiment < min_score:
+            continue
+        if max_score is not None and sentiment > max_score:
+            continue
+        
+        results.append(InterviewListResponse(
             id=str(interview.id),
             resume_id=interview.resume_id,
             file_name=interview.file_name,
-            sentiment_score=interview.analysis.sentiment_score,
-            confidence_score=interview.analysis.confidence_score,
+            candidate_name=candidate_name,
+            candidate_email=candidate_email,
+            sentiment_score=sentiment,
+            confidence_score=interview.analysis.confidence_score if interview.analysis else 0,
             is_analyzed=interview.is_analyzed,
-            created_at=interview.created_at
-        )
-        for interview in interviews
-    ]
+            created_at=interview.created_at,
+        ))
+    
+    return results[skip:skip + limit]
 
 
 @router.get("/{interview_id}", response_model=InterviewAnalysisResponse)

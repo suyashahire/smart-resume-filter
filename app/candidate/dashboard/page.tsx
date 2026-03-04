@@ -29,6 +29,7 @@ import {
   getCandidateApplications,
   getOpenJobs,
   getCandidateProfile,
+  getCandidateDashboardStats,
 } from '@/lib/api';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import {
@@ -162,26 +163,36 @@ export default function CandidateDashboardPage() {
   });
   const [recommendedJobs, setRecommendedJobs] = useState<any[]>([]);
   const [recentApplications, setRecentApplications] = useState<any[]>([]);
+  const [upcomingInterviews, setUpcomingInterviews] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [appsData, jobsData, profileData] = await Promise.all([
+      const [statsData, appsData, jobsData, profileData] = await Promise.all([
+        getCandidateDashboardStats().catch(() => null),
         getCandidateApplications(),
         getOpenJobs(),
         getCandidateProfile().catch(() => null),
       ]);
-      const apps = appsData.applications || [];
-      const total = apps.length;
-      const pending = apps.filter((a: any) => a.status === 'applied').length;
-      const screening = apps.filter((a: any) => a.status === 'screening').length;
-      const interview = apps.filter((a: any) => a.status === 'interview').length;
-      const offers = apps.filter((a: any) => a.status === 'offer').length;
-      const hired = apps.filter((a: any) => a.status === 'hired').length;
-      const rejected = apps.filter((a: any) => a.status === 'rejected').length;
-      setStats({ total, pending, screening, interview, offers, hired, rejected });
 
+      // Use backend stats if available, fallback to client-side computation
+      if (statsData) {
+        setStats(statsData);
+        setUpcomingInterviews(statsData.upcoming_interviews || []);
+      } else {
+        const apps = appsData.applications || [];
+        const total = apps.length;
+        const pending = apps.filter((a: any) => a.status === 'applied').length;
+        const screening = apps.filter((a: any) => a.status === 'screening').length;
+        const interview = apps.filter((a: any) => a.status === 'interview').length;
+        const offers = apps.filter((a: any) => a.status === 'offer').length;
+        const hired = apps.filter((a: any) => a.status === 'hired').length;
+        const rejected = apps.filter((a: any) => a.status === 'rejected').length;
+        setStats({ total, pending, screening, interview, offers, hired, rejected });
+      }
+
+      const apps = appsData.applications || [];
       const filtered = (jobsData || []).filter(
         (j: { title?: string }) => j.title?.trim() !== 'Full Stack Developer'
       );
@@ -514,13 +525,47 @@ export default function CandidateDashboardPage() {
 
               {/* Upcoming Interviews */}
               <DashboardSection title="Upcoming Interviews" icon={Calendar} card divider>
-                <EmptyState
-                  icon={Calendar}
-                  title="No upcoming interviews"
-                  subtitle="Scheduled interviews will appear here — keep applying!"
-                  actionLabel="View Applications"
-                  actionHref="/candidate/applications"
-                />
+                {upcomingInterviews.length === 0 ? (
+                  <EmptyState
+                    icon={Calendar}
+                    title="No upcoming interviews"
+                    subtitle="Scheduled interviews will appear here — keep applying!"
+                    actionLabel="View Applications"
+                    actionHref="/candidate/applications"
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {upcomingInterviews.map((interview: any) => (
+                      <Link
+                        key={interview.application_id}
+                        href={`/candidate/applications/${interview.application_id}`}
+                        className="group flex items-start gap-3 p-3 rounded-xl
+                          border border-violet-100 dark:border-violet-900/30
+                          bg-violet-50/50 dark:bg-violet-900/10
+                          hover:border-violet-200 dark:hover:border-violet-800/40
+                          hover:bg-violet-50 dark:hover:bg-violet-900/20
+                          transition-all duration-150"
+                      >
+                        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-violet-500/15 dark:bg-violet-500/25 flex items-center justify-center">
+                          <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                            {interview.job_title}
+                          </p>
+                          {interview.company && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{interview.company}</p>
+                          )}
+                          <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider">
+                            <Users className="h-2.5 w-2.5" />
+                            Interview Stage
+                          </span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 group-hover:text-violet-500 flex-shrink-0 mt-1" />
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </DashboardSection>
 
               {/* Quick Actions */}

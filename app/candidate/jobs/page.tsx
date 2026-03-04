@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Search, Briefcase, SlidersHorizontal } from 'lucide-react';
-import { getOpenJobs, getCandidateApplications } from '@/lib/api';
+import { getOpenJobs, getCandidateApplications, getSavedJobs, saveJob, unsaveJob } from '@/lib/api';
 import {
   SearchBar,
   FilterSidebar,
@@ -70,7 +70,8 @@ function applyFilters(
 
 export default function CandidateJobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
-  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
+  const [appliedJobIds, setAppliedJobIds] = useState<Map<string, string>>(new Map());
+  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<JobFilters>({
@@ -84,15 +85,17 @@ export default function CandidateJobsPage() {
 
   const fetchJobsAndApplications = useCallback(async () => {
     try {
-      const [jobsData, applicationsData] = await Promise.all([
+      const [jobsData, applicationsData, savedData] = await Promise.all([
         getOpenJobs(),
         getCandidateApplications(),
+        getSavedJobs().catch(() => ({ saved_jobs: [] })),
       ]);
       setJobs(jobsData || []);
-      const appliedIds = new Set(
-        (applicationsData.applications || []).map((a: { job_id: string }) => a.job_id)
+      const appliedMap = new Map(
+        (applicationsData.applications || []).map((a: { job_id: string; status?: string }) => [a.job_id, a.status || 'applied'])
       );
-      setAppliedJobIds(appliedIds);
+      setAppliedJobIds(appliedMap);
+      setSavedJobIds(new Set(savedData.saved_jobs || []));
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
     } finally {
@@ -117,6 +120,30 @@ export default function CandidateJobsPage() {
     () => applyFilters(jobs, searchTerm, filters),
     [jobs, searchTerm, filters]
   );
+
+  const handleToggleSave = useCallback(async (jobId: string) => {
+    const wasSaved = savedJobIds.has(jobId);
+    // Optimistic update
+    setSavedJobIds((prev) => {
+      const next = new Set(prev);
+      wasSaved ? next.delete(jobId) : next.add(jobId);
+      return next;
+    });
+    try {
+      if (wasSaved) {
+        await unsaveJob(jobId);
+      } else {
+        await saveJob(jobId);
+      }
+    } catch {
+      // Revert on error
+      setSavedJobIds((prev) => {
+        const next = new Set(prev);
+        wasSaved ? next.add(jobId) : next.delete(jobId);
+        return next;
+      });
+    }
+  }, [savedJobIds]);
 
   const hasActiveFilters =
     !!filters.jobType ||
@@ -308,10 +335,13 @@ export default function CandidateJobsPage() {
                     <JobCard
                       job={job}
                       hasApplied={appliedJobIds.has(job.id)}
+                      applicationStatus={appliedJobIds.get(job.id)}
                       onAppliedSuccess={(id) =>
-                        setAppliedJobIds((prev) => new Set(prev).add(id))
+                        setAppliedJobIds((prev) => new Map(prev).set(id, 'applied'))
                       }
                       index={index}
+                      isSaved={savedJobIds.has(job.id)}
+                      onToggleSave={handleToggleSave}
                     />
                   </li>
                 ))}

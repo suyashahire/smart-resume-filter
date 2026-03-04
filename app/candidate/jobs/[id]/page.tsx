@@ -20,6 +20,7 @@ export default function JobDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [applicationStatus, setApplicationStatus] = useState<string | undefined>(undefined);
   const [error, setError] = useState('');
   const [applyError, setApplyError] = useState<string | null>(null);
   const [hasResume, setHasResume] = useState(false);
@@ -47,10 +48,13 @@ export default function JobDetailPage() {
           getCandidateProfile().catch(() => null),
         ]);
         setJob(jobData);
-        const alreadyApplied = (applicationsData.applications || []).some(
+        const matchingApp = (applicationsData.applications || []).find(
           (a: { job_id: string }) => a.job_id === jobId
         );
-        setApplied(alreadyApplied);
+        setApplied(!!matchingApp);
+        if (matchingApp) {
+          setApplicationStatus(matchingApp.status || 'applied');
+        }
         const resolvedResume = (resumeData as any)?.resume ?? resumeData;
         setHasResume(!!(resolvedResume && (resolvedResume.id || resolvedResume.filename)));
         const profile = (profileData as any) ?? {};
@@ -77,6 +81,7 @@ export default function JobDetailPage() {
     try {
       await applyToJob(jobId);
       setApplied(true);
+      setApplicationStatus('applied');
     } catch (err: any) {
       setApplyError(err?.message || 'Failed to apply');
     } finally {
@@ -155,6 +160,7 @@ export default function JobDetailPage() {
               jobTitle={job.title}
               company={job.company}
               applied={applied}
+              applicationStatus={applicationStatus}
               isApplying={isApplying}
               onApply={handleApply}
               applyError={applyError}

@@ -23,6 +23,12 @@ const eventIcons: Record<RealtimeEventType, React.ReactNode> = {
   report_generated: <FileText className="h-4 w-4" />,
   job_created: <Briefcase className="h-4 w-4" />,
   job_deleted: <Trash2 className="h-4 w-4" />,
+  new_application: <FileText className="h-4 w-4" />,
+  new_message: <MessageSquare className="h-4 w-4" />,
+  application_status_changed: <Target className="h-4 w-4" />,
+  typing_started: <MessageSquare className="h-4 w-4" />,
+  typing_stopped: <MessageSquare className="h-4 w-4" />,
+  messages_read: <MessageSquare className="h-4 w-4" />,
   connection_established: <Wifi className="h-4 w-4" />,
 };
 
@@ -35,6 +41,12 @@ const eventColors: Record<RealtimeEventType, string> = {
   report_generated: 'bg-indigo-500',
   job_created: 'bg-teal-500',
   job_deleted: 'bg-red-500',
+  new_application: 'bg-cyan-500',
+  new_message: 'bg-violet-500',
+  application_status_changed: 'bg-orange-500',
+  typing_started: 'bg-gray-400',
+  typing_stopped: 'bg-gray-400',
+  messages_read: 'bg-gray-400',
   connection_established: 'bg-gray-500',
 };
 

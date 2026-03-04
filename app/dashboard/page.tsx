@@ -8,6 +8,7 @@ import { SkillsDistributionChart, ScoreDistributionChart, PerformanceTrendChart 
 import { useStore } from '@/store/useStore';
 import * as api from '@/lib/api';
 import RealtimeIndicator from '@/components/features/RealtimeIndicator';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
 
 export default function DashboardPage() {
   const { resumes, filteredResumes, interviews, useRealApi, isAuthenticated, setResumes, setFilteredResumes, jobs, candidateJobAssignments, assignCandidateToJob, hasFetchedSessionData, setHasFetchedSessionData } = useStore();
@@ -284,6 +285,10 @@ export default function DashboardPage() {
       jobMetrics: jobMetrics.slice(0, 5)
     };
   }, [jobs, candidateJobAssignments]);
+
+  if (isLoadingStats || isLoadingResumes) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">

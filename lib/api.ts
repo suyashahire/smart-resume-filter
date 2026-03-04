@@ -370,6 +370,10 @@ export async function updateApplicationStatus(
   });
 }
 
+export async function getApplicationsByStatus(status: string): Promise<any[]> {
+  return apiRequest(`/jobs/applications/by-status/${status}`);
+}
+
 export async function screenCandidates(jobId: string, resumeIds?: string[]): Promise<ResumeWithScore[]> {
   return apiRequest(`/jobs/${jobId}/screen`, {
     method: 'POST',
@@ -440,8 +444,31 @@ export async function processInterview(interviewId: string): Promise<InterviewRe
   return apiRequest(`/interviews/${interviewId}/process`, { method: 'POST' });
 }
 
-export async function getInterviews(): Promise<InterviewResponse[]> {
-  return apiRequest('/interviews');
+export interface InterviewListItem {
+  id: string;
+  resume_id: string;
+  file_name: string;
+  candidate_name?: string;
+  candidate_email?: string;
+  sentiment_score: number;
+  confidence_score: number;
+  is_analyzed: boolean;
+  created_at: string;
+}
+
+export async function getInterviews(params?: {
+  search?: string;
+  min_score?: number;
+  max_score?: number;
+  analyzed_only?: boolean;
+}): Promise<InterviewListItem[]> {
+  const queryParts: string[] = [];
+  if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+  if (params?.min_score != null) queryParts.push(`min_score=${params.min_score}`);
+  if (params?.max_score != null) queryParts.push(`max_score=${params.max_score}`);
+  if (params?.analyzed_only) queryParts.push('analyzed_only=true');
+  const query = queryParts.length ? `?${queryParts.join('&')}` : '';
+  return apiRequest(`/interviews${query}`);
 }
 
 export async function getInterview(id: string): Promise<InterviewResponse> {
@@ -543,6 +570,13 @@ export async function updateProfile(data: { name?: string; email?: string; compa
   return apiRequest('/auth/me', {
     method: 'PUT',
     body: JSON.stringify(data),
+  });
+}
+
+export async function updateNotificationPreferences(preferences: Record<string, boolean>): Promise<any> {
+  return apiRequest('/auth/me', {
+    method: 'PUT',
+    body: JSON.stringify({ notification_preferences: preferences }),
   });
 }
 
@@ -848,6 +882,28 @@ export async function getCandidateProfile(): Promise<any> {
   return apiRequest('/candidate/profile');
 }
 
+export interface CandidateDashboardStats {
+  total: number;
+  pending: number;
+  screening: number;
+  interview: number;
+  offers: number;
+  hired: number;
+  rejected: number;
+  upcoming_interviews: Array<{
+    application_id: string;
+    job_id: string;
+    job_title: string;
+    company?: string;
+    applied_at?: string;
+    updated_at?: string;
+  }>;
+}
+
+export async function getCandidateDashboardStats(): Promise<CandidateDashboardStats> {
+  return apiRequest('/candidate/dashboard/stats');
+}
+
 // ==================== Messaging ====================
 
 export interface ChatMessage {
@@ -858,7 +914,10 @@ export interface ChatMessage {
   content: string;
   sent_at: string;
   read_at?: string;
-  is_mine: boolean;
+  created_at?: string;
+  timestamp?: string;
+  is_mine?: boolean;
+  is_read?: boolean;
 }
 
 export interface ChatConversation {
@@ -873,6 +932,9 @@ export interface ChatConversation {
   job_title?: string;
   last_message_at: string;
   last_message_preview?: string;
+  last_message?: string;
+  last_message_time?: string;
+  updated_at?: string;
   unread_count: number;
   created_at: string;
 }
@@ -908,6 +970,12 @@ export async function markMessagesAsRead(conversationId: string): Promise<{ mess
   });
 }
 
+export async function sendTypingIndicator(conversationId: string, isTyping: boolean = true): Promise<{ message: string }> {
+  return apiRequest(`/messages/typing/${conversationId}?is_typing=${isTyping}`, {
+    method: 'POST',
+  });
+}
+
 export async function deleteConversation(conversationId: string): Promise<{ message: string }> {
   return apiRequest(`/messages/conversations/${conversationId}`, {
     method: 'DELETE',
@@ -916,6 +984,20 @@ export async function deleteConversation(conversationId: string): Promise<{ mess
 
 export async function getUnreadCount(): Promise<{ unread_count: number }> {
   return apiRequest('/messages/unread');
+}
+
+// ==================== Saved / Bookmarked Jobs ====================
+
+export async function saveJob(jobId: string): Promise<{ message: string; saved_jobs: string[] }> {
+  return apiRequest(`/candidate/jobs/${jobId}/save`, { method: 'POST' });
+}
+
+export async function unsaveJob(jobId: string): Promise<{ message: string; saved_jobs: string[] }> {
+  return apiRequest(`/candidate/jobs/${jobId}/save`, { method: 'DELETE' });
+}
+
+export async function getSavedJobs(): Promise<{ saved_jobs: string[] }> {
+  return apiRequest('/candidate/jobs/saved');
 }
 
 // ==================== Admin ====================

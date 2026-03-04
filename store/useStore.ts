@@ -12,6 +12,11 @@ export interface Resume {
   score: number;
   file?: File;
   skillMatches?: string[];
+  jobId?: string;
+  isUnscreened?: boolean;
+  source?: string;
+  applicationId?: string;
+  candidateUserId?: string;
 }
 
 // Candidate notes
@@ -86,6 +91,7 @@ export interface User {
   role: string;
   account_status?: string;
   company?: string;
+  notification_preferences?: Record<string, boolean>;
 }
 
 // Candidate Portal Interfaces
@@ -110,7 +116,10 @@ export interface ChatMessage {
   content: string;
   sent_at: string;
   read_at?: string | null;
+  created_at?: string;
+  timestamp?: string;
   is_mine?: boolean;
+  is_read?: boolean;
 }
 
 export interface ChatConversation {
@@ -133,6 +142,9 @@ export interface ChatConversation {
   job_title?: string;
   last_message_at: string;
   last_message_preview?: string;
+  last_message?: string;
+  last_message_time?: string;
+  updated_at?: string;
   unread_count?: number;
   unread_count_hr?: number;
   unread_count_candidate?: number;

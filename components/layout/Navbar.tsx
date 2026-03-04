@@ -22,6 +22,11 @@ const eventIcons: Record<RealtimeEventType, React.ReactNode> = {
   job_created: <Briefcase className="h-3.5 w-3.5" />,
   job_deleted: <Trash2 className="h-3.5 w-3.5" />,
   new_application: <UserPlus className="h-3.5 w-3.5" />,
+  new_message: <MessageSquare className="h-3.5 w-3.5" />,
+  application_status_changed: <Target className="h-3.5 w-3.5" />,
+  typing_started: <MessageSquare className="h-3.5 w-3.5" />,
+  typing_stopped: <MessageSquare className="h-3.5 w-3.5" />,
+  messages_read: <MessageSquare className="h-3.5 w-3.5" />,
   connection_established: <Wifi className="h-3.5 w-3.5" />,
 };
 
@@ -35,6 +40,11 @@ const eventColors: Record<RealtimeEventType, string> = {
   job_created: 'bg-teal-500',
   job_deleted: 'bg-red-500',
   new_application: 'bg-emerald-500',
+  new_message: 'bg-violet-500',
+  application_status_changed: 'bg-orange-500',
+  typing_started: 'bg-gray-400',
+  typing_stopped: 'bg-gray-400',
+  messages_read: 'bg-gray-400',
   connection_established: 'bg-gray-500',
 };
 
@@ -148,15 +158,34 @@ export default function Navbar() {
     }
   };
 
+  // Map WebSocket event types to notification preference categories
+  const eventCategoryMap: Record<string, string> = {
+    resume_uploaded: 'resume_uploads',
+    candidate_scored: 'candidate_scoring',
+    new_application: 'new_applications',
+    new_message: 'messages',
+    job_created: 'job_updates',
+    job_deleted: 'job_updates',
+    interview_analyzed: 'interviews',
+  };
+
   const handleEvent = useCallback((event: RealtimeEvent) => {
     if (event.type !== 'connection_established') {
-      addNotification(event);
-      // Auto-refresh results page when a candidate is scored (auto-include or manual approval)
+      // Check notification preferences before showing notification
+      const category = eventCategoryMap[event.type];
+      const prefs = user?.notification_preferences;
+      const isMuted = category && prefs && prefs[category] === false;
+
+      if (!isMuted) {
+        addNotification(event);
+      }
+
+      // Always refresh results data regardless of notification preference
       if (event.type === 'candidate_scored') {
         bumpResultsVersion();
       }
     }
-  }, [addNotification, bumpResultsVersion]);
+  }, [addNotification, bumpResultsVersion, user?.notification_preferences]);
 
   const { isConnected } = useRealtimeUpdates({
     onEvent: handleEvent,
@@ -194,11 +223,6 @@ export default function Navbar() {
   const getNavItems = () => {
     let items = [...baseNavItems];
 
-    // Add Messages for HR users
-    if (user?.role === 'hr_manager' || user?.role === 'admin') {
-      items.push({ name: 'Messages', path: '/messages' });
-    }
-
     // Add Admin for admin users
     if (user?.role === 'admin') {
       items.push({ name: 'Admin', path: '/admin' });
@@ -229,7 +253,7 @@ export default function Navbar() {
         }`}>
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-300 ${scrolled ? '' : ''
           }`}>
-          <div className={`flex items-center justify-between px-4 lg:px-6 py-3 rounded-2xl transition-all duration-300 ${scrolled
+          <div className={`flex items-center justify-between px-3 lg:px-4 py-3 rounded-2xl transition-all duration-300 ${scrolled
               ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg shadow-gray-200/20 dark:shadow-black/20 border border-gray-200/50 dark:border-gray-700/50'
               : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-md border border-gray-200/30 dark:border-gray-700/30'
             }`}>
@@ -275,6 +299,26 @@ export default function Navbar() {
 
             {/* Right Section */}
             <div className="flex items-center gap-2">
+              {/* Messages - only show when authenticated & HR/admin */}
+              {isAuthenticated && (user?.role === 'hr_manager' || user?.role === 'admin') && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => router.push('/messages')}
+                  className={`relative p-2 rounded-lg transition-colors ${
+                    pathname === '/messages'
+                      ? 'bg-primary-500/10 dark:bg-primary-500/20'
+                      : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <MessageSquare className={`h-5 w-5 ${
+                    pathname === '/messages'
+                      ? 'text-primary-500'
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`} />
+                </motion.button>
+              )}
+
               {/* Calendar - only show when authenticated */}
               {isAuthenticated && (
                 <motion.button
@@ -604,6 +648,20 @@ export default function Navbar() {
 
               {isAuthenticated && user && (
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+                  {(user.role === 'hr_manager' || user.role === 'admin') && (
+                    <Link
+                      href="/messages"
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors mb-1 ${
+                        pathname === '/messages'
+                          ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <MessageSquare className="h-5 w-5" />
+                      <span className="font-medium">Messages</span>
+                    </Link>
+                  )}
                   <Link
                     href="/profile"
                     onClick={() => setIsMenuOpen(false)}

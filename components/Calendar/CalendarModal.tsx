@@ -23,6 +23,7 @@ import {
   CalendarDays,
   MapPin,
 } from 'lucide-react';
+import * as api from '@/lib/api';
 
 interface CalendarEvent {
   id: string;
@@ -100,9 +101,77 @@ export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }
   // Save events to localStorage (per-user) — only after initial load
   useEffect(() => {
     if (hasLoaded) {
-      localStorage.setItem(storageKey, JSON.stringify(events));
+      // Only save user-created events (not auto-populated interview ones)
+      const userEvents = events.filter(e => !e.id.startsWith('auto-interview-'));
+      localStorage.setItem(storageKey, JSON.stringify(userEvents));
     }
   }, [events, storageKey, hasLoaded]);
+
+  // Auto-populate interview-stage applications from backend
+  useEffect(() => {
+    if (!isOpen || !hasLoaded) return;
+    
+    const fetchInterviewApplications = async () => {
+      try {
+        if (variant === 'candidate') {
+          // Candidate: use dashboard stats for upcoming interviews
+          const stats = await api.getCandidateDashboardStats();
+          if (stats?.upcoming_interviews?.length > 0) {
+            const autoEvents: CalendarEvent[] = stats.upcoming_interviews.map((interview: any) => {
+              const dateStr = interview.updated_at || interview.applied_at || new Date().toISOString();
+              const date = new Date(dateStr);
+              const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+              return {
+                id: `auto-interview-${interview.application_id}`,
+                title: `Interview: ${interview.job_title}`,
+                date: dateKey,
+                time: undefined,
+                type: 'interview' as const,
+                description: interview.company ? `${interview.company} — Interview Stage` : 'Interview Stage',
+                color: 'bg-violet-500',
+              };
+            });
+            setEvents(prev => {
+              const userEvents = prev.filter(e => !e.id.startsWith('auto-interview-'));
+              return [...userEvents, ...autoEvents];
+            });
+          }
+        } else {
+          // HR: fetch applications in interview status
+          try {
+            const appsData = await api.getApplicationsByStatus('interview');
+            if (appsData?.length > 0) {
+              const autoEvents: CalendarEvent[] = appsData.map((app: any) => {
+                const dateStr = app.updated_at || app.applied_at || new Date().toISOString();
+                const date = new Date(dateStr);
+                const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                return {
+                  id: `auto-interview-${app.id}`,
+                  title: `Interview: ${app.candidate_name || 'Candidate'}`,
+                  date: dateKey,
+                  time: undefined,
+                  type: 'interview' as const,
+                  description: app.job_title ? `${app.job_title}` : 'Interview Stage',
+                  color: 'bg-violet-500',
+                };
+              });
+              setEvents(prev => {
+                const userEvents = prev.filter(e => !e.id.startsWith('auto-interview-'));
+                return [...userEvents, ...autoEvents];
+              });
+            }
+          } catch {
+            // HR endpoint might not exist yet, fail silently
+          }
+        }
+      } catch (err) {
+        // Silently fail — auto-populate is supplemental
+        console.debug('Calendar auto-populate failed:', err);
+      }
+    };
+    
+    fetchInterviewApplications();
+  }, [isOpen, hasLoaded, variant]);
 
   const isHR = variant === 'hr';
 
@@ -653,7 +722,8 @@ export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }
                                   )}
                                 </div>
                               </div>
-                              {/* Action buttons - shown on hover */}
+                              {/* Action buttons - shown on hover (not for auto-populated events) */}
+                              {!event.id.startsWith('auto-interview-') && (
                               <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-gray-100 dark:border-white/[0.04] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                 <button
                                   onClick={() => handleEditEvent(event)}
@@ -670,6 +740,12 @@ export default function CalendarModal({ isOpen, onClose, variant = 'candidate' }
                                   Delete
                                 </button>
                               </div>
+                              )}
+                              {event.id.startsWith('auto-interview-') && (
+                                <div className="mt-2 pt-2 border-t border-gray-100 dark:border-white/[0.04]">
+                                  <span className="text-[10px] font-medium text-violet-500 dark:text-violet-400 uppercase tracking-wider">Auto-synced from pipeline</span>
+                                </div>
+                              )}
                             </motion.div>
                           );
                         })}

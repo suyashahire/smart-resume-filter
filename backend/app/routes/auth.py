@@ -178,6 +178,7 @@ async def register(user_data: UserCreate):
                 is_active=user.is_active,
                 account_status=user.account_status,
                 company=user.company,
+                notification_preferences=user.notification_preferences,
                 created_at=user.created_at,
                 last_login=user.last_login
             )
@@ -196,6 +197,7 @@ async def register(user_data: UserCreate):
             is_active=user.is_active,
             account_status=user.account_status,
             company=user.company,
+            notification_preferences=user.notification_preferences,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -256,6 +258,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             is_active=user.is_active,
             account_status=user.account_status,
             company=user.company,
+            notification_preferences=user.notification_preferences,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -315,6 +318,7 @@ async def login_json(login_data: UserLogin):
             is_active=user.is_active,
             account_status=user.account_status,
             company=user.company,
+            notification_preferences=user.notification_preferences,
             created_at=user.created_at,
             last_login=user.last_login
         )
@@ -332,6 +336,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         is_active=current_user.is_active,
         account_status=current_user.account_status,
         company=current_user.company,
+        notification_preferences=current_user.notification_preferences,
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )
@@ -359,6 +364,9 @@ async def update_current_user(
     if user_update.company is not None:
         current_user.company = user_update.company
     
+    if user_update.notification_preferences is not None:
+        current_user.notification_preferences = user_update.notification_preferences
+    
     current_user.updated_at = datetime.utcnow()
     await current_user.save()
     
@@ -370,6 +378,7 @@ async def update_current_user(
         is_active=current_user.is_active,
         account_status=current_user.account_status,
         company=current_user.company,
+        notification_preferences=current_user.notification_preferences,
         created_at=current_user.created_at,
         last_login=current_user.last_login
     )

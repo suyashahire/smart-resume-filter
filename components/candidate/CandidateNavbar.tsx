@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,17 +22,64 @@ import {
   Calendar,
   FileBadge,
   Brain,
+  Target,
+  Wifi,
+  UserPlus,
+  Trash2,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useTheme } from '@/contexts/ThemeContext';
 import CalendarModal from '@/components/Calendar/CalendarModal';
+import { useRealtimeUpdates, useRealtimeNotifications, RealtimeEvent, RealtimeEventType } from '@/hooks/useRealtimeUpdates';
+import * as api from '@/lib/api';
+
+// Event icons and colors for candidate notifications
+const eventIcons: Record<string, React.ReactNode> = {
+  new_application: <FileText className="h-3.5 w-3.5" />,
+  pipeline_status_changed: <Target className="h-3.5 w-3.5" />,
+  new_message: <MessageSquare className="h-3.5 w-3.5" />,
+  job_created: <Briefcase className="h-3.5 w-3.5" />,
+  candidate_scored: <Target className="h-3.5 w-3.5" />,
+  resume_uploaded: <FileText className="h-3.5 w-3.5" />,
+  resume_parsed: <FileText className="h-3.5 w-3.5" />,
+  interview_analyzed: <MessageSquare className="h-3.5 w-3.5" />,
+  report_generated: <FileText className="h-3.5 w-3.5" />,
+  job_deleted: <Trash2 className="h-3.5 w-3.5" />,
+  connection_established: <Wifi className="h-3.5 w-3.5" />,
+};
+
+const eventColors: Record<string, string> = {
+  new_application: 'bg-emerald-500',
+  pipeline_status_changed: 'bg-purple-500',
+  new_message: 'bg-candidate-500',
+  job_created: 'bg-teal-500',
+  candidate_scored: 'bg-emerald-500',
+  resume_uploaded: 'bg-blue-500',
+  resume_parsed: 'bg-blue-500',
+  interview_analyzed: 'bg-amber-500',
+  report_generated: 'bg-indigo-500',
+  job_deleted: 'bg-red-500',
+  connection_established: 'bg-gray-500',
+};
+
+function formatTimestamp(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  return date.toLocaleTimeString();
+}
 
 const navItems = [
   { href: '/candidate', label: 'Home', icon: Home },
   { href: '/candidate/jobs', label: 'Browse Jobs', icon: Briefcase },
-  { href: '/candidate/applications', label: 'My Applications', icon: FileText },
-  { href: '/candidate/resume', label: 'My Resume', icon: FileBadge },
-  { href: '/candidate/messages', label: 'Messages', icon: MessageSquare },
+  { href: '/candidate/applications', label: 'Applications', icon: FileText },
+  { href: '/candidate/resume', label: 'Resume', icon: FileBadge },
   { href: '/candidate/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ];
 
@@ -44,6 +91,80 @@ export default function CandidateNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+
+  // Realtime notifications
+  const [authToken, setAuthToken] = useState<string | undefined>(undefined);
+  const { notifications, addNotification, dismissNotification, clearNotifications, setNotifications } = useRealtimeNotifications();
+  const [dbNotificationsLoaded, setDbNotificationsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token');
+      setAuthToken(token || undefined);
+    }
+  }, []);
+
+  // Load persisted notifications from database on mount
+  useEffect(() => {
+    if (!user || dbNotificationsLoaded) return;
+    const loadDbNotifications = async () => {
+      try {
+        const response = await api.getNotifications();
+        if (response.notifications && response.notifications.length > 0) {
+          const mapped = response.notifications
+            .filter((n: api.NotificationItem) => !n.is_read)
+            .map((n: api.NotificationItem) => ({
+              id: n.id,
+              type: n.type as RealtimeEventType,
+              message: n.message,
+              timestamp: new Date(n.created_at),
+              data: {
+                notification_db_id: n.id,
+                application_id: n.application_id,
+                candidate_name: n.candidate_name,
+                job_title: n.job_title,
+                job_id: n.job_id,
+              },
+            }));
+          if (mapped.length > 0) {
+            setNotifications(mapped);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      }
+      setDbNotificationsLoaded(true);
+    };
+    loadDbNotifications();
+  }, [user, dbNotificationsLoaded, setNotifications]);
+
+  // Notification preference filtering
+  const eventCategoryMap: Record<string, string> = {
+    new_application: 'new_applications',
+    pipeline_status_changed: 'new_applications',
+    new_message: 'messages',
+    job_created: 'job_updates',
+    job_deleted: 'job_updates',
+  };
+
+  const handleEvent = useCallback((event: RealtimeEvent) => {
+    if (event.type !== 'connection_established') {
+      const category = eventCategoryMap[event.type];
+      const prefs = user?.notification_preferences;
+      const isMuted = category && prefs && prefs[category] === false;
+
+      if (!isMuted) {
+        addNotification(event);
+      }
+    }
+  }, [addNotification, user?.notification_preferences]);
+
+  const { isConnected } = useRealtimeUpdates({
+    onEvent: handleEvent,
+    token: authToken,
+    enabled: !!user
+  });
 
   // Handle scroll effect
   useEffect(() => {
@@ -131,6 +252,24 @@ export default function CandidateNavbar() {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
+              {/* Messages */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push('/candidate/messages')}
+                className={`relative p-2 rounded-lg transition-colors ${
+                  pathname === '/candidate/messages'
+                    ? 'bg-candidate-500/10 dark:bg-candidate-500/20'
+                    : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                <MessageSquare className={`h-5 w-5 ${
+                  pathname === '/candidate/messages'
+                    ? 'text-candidate-500'
+                    : 'text-gray-600 dark:text-gray-400'
+                }`} />
+              </motion.button>
+
               {/* Calendar */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -142,14 +281,114 @@ export default function CandidateNavbar() {
               </motion.button>
 
               {/* Notifications */}
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="relative p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              >
-                <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-candidate-500 rounded-full"></span>
-              </motion.button>
+              <div className="relative">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowNotificationPanel(!showNotificationPanel)}
+                  className="relative p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                  {notifications.length > 0 && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-candidate-500 text-white text-xs rounded-full flex items-center justify-center font-bold"
+                    >
+                      {notifications.length > 9 ? '9+' : notifications.length}
+                    </motion.span>
+                  )}
+                  <span className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                </motion.button>
+
+                {/* Notification Dropdown Panel */}
+                <AnimatePresence>
+                  {showNotificationPanel && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 top-full mt-2 w-80 max-h-[400px] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+                    >
+                      {/* Header */}
+                      <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-candidate-50 to-cyan-50 dark:from-candidate-900/20 dark:to-cyan-900/20">
+                        <div className="flex items-center gap-2">
+                          <Bell className="h-4 w-4 text-candidate-600 dark:text-candidate-400" />
+                          <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Notifications</h3>
+                          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {notifications.length > 0 && (
+                            <button
+                              onClick={async () => {
+                                try { await api.deleteAllNotifications(); } catch (e) { console.error('Failed to delete all notifications:', e); }
+                                clearNotifications();
+                              }}
+                              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setShowNotificationPanel(false)}
+                            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                          >
+                            <X className="h-4 w-4 text-gray-500" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Notifications List */}
+                      <div className="max-h-[320px] overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                            <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                            <p className="text-sm">No notifications</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {isConnected ? 'Live updates enabled' : 'Connecting...'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {notifications.map((notification) => (
+                              <motion.div
+                                key={notification.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={`p-1.5 rounded-lg ${eventColors[notification.type] || 'bg-gray-500'} text-white`}>
+                                    {eventIcons[notification.type] || <Bell className="h-3.5 w-3.5" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-gray-900 dark:text-white">
+                                      {notification.message}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                      {formatTimestamp(notification.timestamp)}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      const dbId = (notification.data?.notification_db_id as string) || notification.id;
+                                      try { await api.deleteNotification(dbId); } catch (e) { console.error('Failed to delete notification:', e); }
+                                      dismissNotification(notification.id);
+                                    }}
+                                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                                  >
+                                    <X className="h-3 w-3 text-gray-400" />
+                                  </button>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {/* Theme Toggle */}
               <motion.button
@@ -338,6 +577,18 @@ export default function CandidateNavbar() {
               </div>
 
               <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+                <Link
+                  href="/candidate/messages"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors mb-1 ${
+                    pathname === '/candidate/messages'
+                      ? 'bg-candidate-500/10 text-candidate-600 dark:text-candidate-400'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <MessageSquare className="h-5 w-5" />
+                  <span className="font-medium">Messages</span>
+                </Link>
                 <Link
                   href="/candidate/profile"
                   onClick={() => setIsMobileMenuOpen(false)}

@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button';
 import { useStore, Job, CandidateJobAssignment } from '@/store/useStore';
 import * as api from '@/lib/api';
 import RealtimeIndicator from '@/components/features/RealtimeIndicator';
+import { ResultsSkeleton } from '@/components/ui/Skeleton';
 
 function ResultsContent() {
   const router = useRouter();
@@ -58,7 +59,7 @@ function ResultsContent() {
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [scoreFilter, setScoreFilter] = useState<'all' | 'excellent' | 'good' | 'fair' | 'low'>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'excellent' | 'good' | 'fair' | 'low' | 'unscreened'>('all');
   const [minScore, setMinScore] = useState(0);
   const [maxScore, setMaxScore] = useState(100);
   const [showFilters, setShowFilters] = useState(false);
@@ -81,6 +82,10 @@ function ResultsContent() {
   const [showTagsDropdown, setShowTagsDropdown] = useState<string | null>(null);
   const [showStatusDropdown, setShowStatusDropdown] = useState<string | null>(null);
   const [newNoteText, setNewNoteText] = useState('');
+  
+  // Bulk status change state
+  const [showBulkStatusDropdown, setShowBulkStatusDropdown] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   
   // Interview Questions Generator state
   const [showQuestionsModal, setShowQuestionsModal] = useState(false);
@@ -382,14 +387,17 @@ function ResultsContent() {
 
   // Memoize stats BEFORE any early returns (Rules of Hooks)
   const stats = useMemo(() => {
-    const excellentCount = filteredResumes.filter(r => r.score >= 75).length;
-    const goodCount = filteredResumes.filter(r => r.score >= 60 && r.score < 75).length;
-    const fairCount = filteredResumes.filter(r => r.score >= 45 && r.score < 60).length;
-    const avgScore = filteredResumes.length > 0
-      ? Math.round(filteredResumes.reduce((acc, r) => acc + r.score, 0) / filteredResumes.length)
+    const unscreenedCount = filteredResumes.filter(r => (r as any).isUnscreened).length;
+    const screenedResumes = filteredResumes.filter(r => !(r as any).isUnscreened);
+    const excellentCount = screenedResumes.filter(r => r.score >= 75).length;
+    const goodCount = screenedResumes.filter(r => r.score >= 60 && r.score < 75).length;
+    const fairCount = screenedResumes.filter(r => r.score >= 45 && r.score < 60).length;
+    const lowCount = screenedResumes.filter(r => r.score < 45).length;
+    const avgScore = screenedResumes.length > 0
+      ? Math.round(screenedResumes.reduce((acc, r) => acc + r.score, 0) / screenedResumes.length)
       : 0;
     
-    return { total: filteredResumes.length, excellent: excellentCount, good: goodCount, fair: fairCount, avgScore };
+    return { total: filteredResumes.length, excellent: excellentCount, good: goodCount, fair: fairCount, low: lowCount, unscreened: unscreenedCount, avgScore };
   }, [filteredResumes]);
 
   // Filter candidates based on search and filters
@@ -403,7 +411,7 @@ function ResultsContent() {
         .filter(a => a.jobId === selectedJobFilter)
         .map(a => a.candidateId);
       candidates = candidates.filter(c => 
-        c.jobId === selectedJobFilter || assignedCandidateIds.includes(c.id)
+        (c as any).jobId === selectedJobFilter || assignedCandidateIds.includes(c.id)
       );
     }
     
@@ -425,10 +433,11 @@ function ResultsContent() {
     // Quick score filter
     if (scoreFilter !== 'all') {
       candidates = candidates.filter(c => {
-        if (scoreFilter === 'excellent') return c.score >= 75;
-        if (scoreFilter === 'good') return c.score >= 60 && c.score < 75;
-        if (scoreFilter === 'fair') return c.score >= 45 && c.score < 60;
-        if (scoreFilter === 'low') return c.score < 45;
+        if (scoreFilter === 'unscreened') return (c as any).isUnscreened === true;
+        if (scoreFilter === 'excellent') return c.score >= 75 && !(c as any).isUnscreened;
+        if (scoreFilter === 'good') return c.score >= 60 && c.score < 75 && !(c as any).isUnscreened;
+        if (scoreFilter === 'fair') return c.score >= 45 && c.score < 60 && !(c as any).isUnscreened;
+        if (scoreFilter === 'low') return c.score < 45 && !(c as any).isUnscreened;
         return true;
       });
     }
@@ -522,6 +531,55 @@ function ResultsContent() {
     }
   };
 
+  const handleBulkStatusChange = async (newStatus: CandidateJobAssignment['status']) => {
+    if (selectedIds.size === 0 || selectedJobFilter === 'all') return;
+    const count = selectedIds.size;
+    const statusLabel = pipelineStatuses.find(s => s.value === newStatus)?.label || newStatus;
+    if (!confirm(`Move ${count} candidate${count > 1 ? 's' : ''} to "${statusLabel}"?`)) return;
+
+    setIsBulkUpdating(true);
+    const ids = Array.from(selectedIds);
+
+    for (const id of ids) {
+      const candidate = displayedCandidates.find(c => c.id === id);
+      if (!candidate) continue;
+
+      // Optimistic update
+      updateCandidateJobStatus(id, selectedJobFilter, newStatus);
+      addActivity({
+        type: 'status_changed',
+        description: `${candidate.name} moved to ${statusLabel}`,
+        candidateId: id,
+        jobId: selectedJobFilter,
+        metadata: { newStatus },
+      });
+
+      // Persist to backend
+      if ((candidate as any).applicationId) {
+        try {
+          await api.updateApplicationStatus((candidate as any).applicationId, newStatus);
+        } catch (err) {
+          console.error(`Failed to update status for ${id}:`, err);
+        }
+      }
+    }
+
+    setIsBulkUpdating(false);
+    setShowBulkStatusDropdown(false);
+    clearSelection();
+  };
+
+  const handleBulkMessage = () => {
+    // Navigate to messages with first selected candidate pre-loaded
+    const firstId = Array.from(selectedIds)[0];
+    const candidate = displayedCandidates.find(c => c.id === firstId);
+    if (candidate?.email) {
+      router.push(`/messages?candidate=${firstId}`);
+    } else {
+      router.push('/messages');
+    }
+  };
+
   // CSV Export function
   const exportToCSV = () => {
     const candidatesToExport = selectedIds.size > 0 
@@ -594,67 +652,6 @@ function ResultsContent() {
     }
   };
 
-  // Show loading state when fetching
-  if (isLoadingData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <Loader2 className="h-12 w-12 animate-spin text-primary-500 mx-auto mb-4" />
-          <p className="text-lg text-gray-600 dark:text-gray-400">Loading candidates...</p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (filteredResumes.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 right-20 w-[500px] h-[500px] bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-full blur-[120px]"></div>
-          <div className="absolute -bottom-20 -left-20 w-[400px] h-[400px] bg-gradient-to-br from-emerald-500/15 to-cyan-500/15 rounded-full blur-[100px]"></div>
-        </div>
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 rounded-[2rem] shadow-2xl border border-white/50 dark:border-gray-800/50 p-12 text-center"
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center mx-auto mb-8 shadow-lg"
-            >
-              <AlertCircle className="h-12 w-12 text-gray-400" />
-            </motion.div>
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">No Results Yet</h2>
-            <p className="text-lg text-gray-600 dark:text-gray-400 mb-10 max-w-md mx-auto">
-              Upload resumes and define a job description to start screening candidates
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/upload-resume">
-                <motion.button
-                  whileHover={{ scale: 1.03, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-8 py-4 bg-gradient-to-r from-primary-500 via-primary-600 to-purple-600 text-white rounded-2xl font-semibold shadow-xl shadow-primary-500/30 inline-flex items-center gap-3"
-                >
-                  <Sparkles className="h-5 w-5" />
-                  Upload Resumes
-                  <ArrowRight className="h-5 w-5" />
-                </motion.button>
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
   const getScoreColor = (score: number) => {
     if (score >= 75) return 'from-emerald-400 via-green-500 to-teal-600';
     if (score >= 60) return 'from-blue-400 via-indigo-500 to-violet-600';
@@ -688,7 +685,8 @@ function ResultsContent() {
     { value: 'excellent', label: 'Excellent', count: stats.excellent, gradient: 'from-emerald-500 to-green-600' },
     { value: 'good', label: 'Good', count: stats.good, gradient: 'from-blue-500 to-indigo-600' },
     { value: 'fair', label: 'Fair', count: stats.fair, gradient: 'from-amber-500 to-orange-600' },
-    { value: 'low', label: 'Low', count: stats.total - stats.excellent - stats.good - stats.fair, gradient: 'from-rose-500 to-red-600' },
+    { value: 'low', label: 'Low', count: stats.low, gradient: 'from-rose-500 to-red-600' },
+    { value: 'unscreened', label: 'Unscreened', count: stats.unscreened, gradient: 'from-slate-400 to-gray-500' },
   ];
 
   return (
@@ -709,6 +707,7 @@ function ResultsContent() {
         >
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div>
+              {filteredResumes.length > 0 && (
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -719,13 +718,26 @@ function ResultsContent() {
                 <span>Screening Complete</span>
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </motion.div>
+              )}
               
               <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-3">
                 Candidate <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 bg-clip-text text-transparent">Rankings</span>
               </h1>
               <p className="text-lg text-gray-600 dark:text-gray-400">
-                <span className="font-semibold text-gray-900 dark:text-white">{filteredResumes.length}</span> candidates evaluated for{' '}
-                <span className="font-semibold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">{jobDescription?.title || 'the position'}</span>
+                {filteredResumes.length > 0 ? (
+                  <>
+                    <span className="font-semibold text-gray-900 dark:text-white">{filteredResumes.length}</span> candidates evaluated
+                    {(selectedJobFilter !== 'all' ? jobs.find(j => j.id === selectedJobFilter)?.title : jobDescription?.title) && (
+                      <> for{' '}
+                        <span className="font-semibold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">
+                          {selectedJobFilter !== 'all' ? jobs.find(j => j.id === selectedJobFilter)?.title : jobDescription?.title}
+                        </span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  'Upload resumes and screen them to see candidate rankings'
+                )}
               </p>
             </div>
             
@@ -832,8 +844,8 @@ function ResultsContent() {
                     <option value="all">All Candidates</option>
                     {jobs.map((job) => {
                       // Count candidates from screening results (includes portal applicants) + manual assignments
-                      const screenedForJob = filteredResumes.filter(r => r.jobId === job.id).length;
-                      const manuallyAssigned = candidateJobAssignments.filter(a => a.jobId === job.id && !filteredResumes.some(r => r.id === a.candidateId && r.jobId === job.id)).length;
+                      const screenedForJob = filteredResumes.filter((r: any) => r.jobId === job.id).length;
+                      const manuallyAssigned = candidateJobAssignments.filter(a => a.jobId === job.id && !filteredResumes.some((r: any) => r.id === a.candidateId && r.jobId === job.id)).length;
                       const totalCount = screenedForJob + manuallyAssigned;
                       return (
                         <option key={job.id} value={job.id}>
@@ -1093,6 +1105,65 @@ function ResultsContent() {
                   >
                     Clear
                   </button>
+
+                  {/* Bulk Status Change */}
+                  {selectedJobFilter !== 'all' && (
+                    <div className="relative">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowBulkStatusDropdown(!showBulkStatusDropdown)}
+                        disabled={isBulkUpdating}
+                        className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isBulkUpdating ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <Tags className="h-4 w-4" />
+                            Change Status
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </>
+                        )}
+                      </motion.button>
+                      <AnimatePresence>
+                        {showBulkStatusDropdown && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                            className="absolute top-full mt-2 right-0 z-50 w-48 bg-white dark:bg-gray-800 rounded-xl border border-gray-200/60 dark:border-gray-700/60 shadow-2xl overflow-hidden"
+                          >
+                            {pipelineStatuses.map((status) => (
+                              <button
+                                key={status.value}
+                                onClick={() => handleBulkStatusChange(status.value)}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors"
+                              >
+                                <span className={`w-2 h-2 rounded-full ${status.color}`} />
+                                {status.label}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Bulk Message */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleBulkMessage}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/30 flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    Message
+                  </motion.button>
+
                   {canCompare && (
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -1161,7 +1232,46 @@ function ResultsContent() {
         )}
 
         {/* Candidate List */}
-        {displayedCandidates.length === 0 && hasActiveFilters ? (
+        {isLoadingData ? (
+          <ResultsSkeleton />
+        ) : displayedCandidates.length === 0 && !hasActiveFilters ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="backdrop-blur-xl bg-white/70 dark:bg-gray-900/70 rounded-2xl border border-white/50 dark:border-gray-800/50 p-16 text-center shadow-xl"
+          >
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center mx-auto mb-6 shadow-lg">
+              <Users className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">No Candidates Yet</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
+              Upload resumes and screen them against a job to see candidates here
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link href="/upload-resume">
+                <motion.button
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="px-6 py-3 bg-gradient-to-r from-primary-500 via-primary-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg shadow-primary-500/30 inline-flex items-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Upload Resumes
+                  <ArrowRight className="h-4 w-4" />
+                </motion.button>
+              </Link>
+              <Link href="/jobs">
+                <motion.button
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="px-6 py-3 backdrop-blur-xl bg-white/80 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 rounded-xl font-medium border border-gray-200/50 dark:border-gray-700/50 hover:border-primary-500/50 hover:text-primary-600 dark:hover:text-primary-400 transition-all shadow-lg inline-flex items-center gap-2"
+                >
+                  <Briefcase className="h-4 w-4" />
+                  View Jobs
+                </motion.button>
+              </Link>
+            </div>
+          </motion.div>
+        ) : displayedCandidates.length === 0 && hasActiveFilters ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1480,6 +1590,13 @@ function ResultsContent() {
                                     <button
                                       key={status.value}
                                       onClick={async () => {
+                                        // Save previous status for rollback
+                                        const prevAssignment = candidateJobAssignments.find(
+                                          a => a.candidateId === candidate.id && a.jobId === selectedJobFilter
+                                        );
+                                        const previousStatus = prevAssignment?.status || 'new';
+                                        
+                                        // Optimistic update
                                         updateCandidateJobStatus(candidate.id, selectedJobFilter, status.value);
                                         addActivity({
                                           type: 'status_changed',
@@ -1495,6 +1612,15 @@ function ResultsContent() {
                                             await api.updateApplicationStatus(candidate.applicationId, status.value);
                                           } catch (err) {
                                             console.error('Failed to update application status:', err);
+                                            // Rollback on failure
+                                            updateCandidateJobStatus(candidate.id, selectedJobFilter, previousStatus);
+                                            addActivity({
+                                              type: 'status_changed',
+                                              description: `Failed to move ${candidate.name} — reverted to ${previousStatus}`,
+                                              candidateId: candidate.id,
+                                              jobId: selectedJobFilter,
+                                              metadata: { newStatus: previousStatus }
+                                            });
                                           }
                                         }
                                       }}
@@ -1798,11 +1924,18 @@ function ResultsContent() {
                           setDragOverColumn(status.value);
                         }}
                         onDragLeave={() => setDragOverColumn(null)}
-                        onDrop={(e) => {
+                        onDrop={async (e) => {
                           e.preventDefault();
                           if (draggedCandidate) {
-                            updateCandidateJobStatus(draggedCandidate, selectedJobFilter, status.value);
                             const candidate = displayedCandidates.find(c => c.id === draggedCandidate);
+                            // Save previous status for rollback
+                            const prevAssignment = candidateJobAssignments.find(
+                              a => a.candidateId === draggedCandidate && a.jobId === selectedJobFilter
+                            );
+                            const previousStatus = prevAssignment?.status || 'new';
+                            
+                            // Optimistic update
+                            updateCandidateJobStatus(draggedCandidate, selectedJobFilter, status.value);
                             if (candidate) {
                               addActivity({
                                 type: 'status_changed',
@@ -1813,9 +1946,20 @@ function ResultsContent() {
                               });
                               // Persist to backend & notify candidate
                               if (candidate.applicationId) {
-                                api.updateApplicationStatus(candidate.applicationId, status.value).catch(err =>
-                                  console.error('Failed to update application status:', err)
-                                );
+                                try {
+                                  await api.updateApplicationStatus(candidate.applicationId, status.value);
+                                } catch (err) {
+                                  console.error('Failed to update application status:', err);
+                                  // Rollback on failure
+                                  updateCandidateJobStatus(draggedCandidate, selectedJobFilter, previousStatus);
+                                  addActivity({
+                                    type: 'status_changed',
+                                    description: `Failed to move ${candidate.name} — reverted to ${previousStatus}`,
+                                    candidateId: draggedCandidate,
+                                    jobId: selectedJobFilter,
+                                    metadata: { newStatus: previousStatus }
+                                  });
+                                }
                               }
                             }
                           }
@@ -2591,7 +2735,7 @@ function ResultsContent() {
 
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>}>
+    <Suspense fallback={<ResultsSkeleton />}>
       <ResultsContent />
     </Suspense>
   );

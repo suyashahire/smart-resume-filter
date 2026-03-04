@@ -4,7 +4,7 @@ User model for authentication and authorization.
 
 from beanie import Document
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, Dict, List
 from datetime import datetime
 from enum import Enum
 
@@ -36,11 +36,19 @@ class User(Document):
     # Company info (for HR users)
     company: Optional[str] = None
     
+    # Notification preferences (category -> enabled)
+    # None means all enabled (default). Categories: resume_uploads, candidate_scoring,
+    # new_applications, messages, job_updates, interviews
+    notification_preferences: Optional[Dict[str, bool]] = None
+    
     # Account approval (for HR accounts requiring admin approval)
     account_status: AccountStatus = Field(default=AccountStatus.APPROVED)
     rejection_reason: Optional[str] = None
     approved_by: Optional[str] = None  # Admin user ID who approved
     approved_at: Optional[datetime] = None
+    
+    # Saved/bookmarked jobs (for candidates)
+    saved_jobs: List[str] = Field(default_factory=list)
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -93,6 +101,7 @@ class UserResponse(BaseModel):
     account_status: AccountStatus = AccountStatus.APPROVED
     rejection_reason: Optional[str] = None
     company: Optional[str] = None
+    notification_preferences: Optional[Dict[str, bool]] = None
     created_at: datetime
     last_login: Optional[datetime]
     
@@ -107,6 +116,7 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
     company: Optional[str] = None
+    notification_preferences: Optional[Dict[str, bool]] = None
 
 
 class Token(BaseModel):

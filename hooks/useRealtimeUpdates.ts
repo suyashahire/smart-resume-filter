@@ -23,7 +23,10 @@ export type RealtimeEventType =
   | 'new_application'
   | 'new_message'
   | 'application_status_changed'
-  | 'connection_established';
+  | 'connection_established'
+  | 'typing_started'
+  | 'typing_stopped'
+  | 'messages_read';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;

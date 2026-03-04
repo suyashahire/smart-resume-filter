@@ -40,9 +40,57 @@ export interface JobItem {
 interface JobCardProps {
   job: JobItem;
   hasApplied: boolean;
+  applicationStatus?: string;
   onAppliedSuccess: (jobId: string) => void;
   index?: number;
+  isSaved?: boolean;
+  onToggleSave?: (jobId: string) => void;
 }
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
+  applied: {
+    label: 'Applied',
+    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    icon: 'check',
+  },
+  new: {
+    label: 'New',
+    bg: 'bg-gray-50 dark:bg-gray-800/40',
+    text: 'text-gray-600 dark:text-gray-400',
+    icon: 'check',
+  },
+  screening: {
+    label: 'Screening',
+    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    text: 'text-blue-600 dark:text-blue-400',
+    icon: 'search',
+  },
+  interview: {
+    label: 'Interview',
+    bg: 'bg-violet-50 dark:bg-violet-900/20',
+    text: 'text-violet-600 dark:text-violet-400',
+    icon: 'calendar',
+  },
+  offer: {
+    label: 'Offer',
+    bg: 'bg-amber-50 dark:bg-amber-900/20',
+    text: 'text-amber-600 dark:text-amber-400',
+    icon: 'star',
+  },
+  hired: {
+    label: 'Hired',
+    bg: 'bg-green-50 dark:bg-green-900/20',
+    text: 'text-green-600 dark:text-green-400',
+    icon: 'badge',
+  },
+  rejected: {
+    label: 'Rejected',
+    bg: 'bg-red-50 dark:bg-red-900/20',
+    text: 'text-red-500 dark:text-red-400',
+    icon: 'x',
+  },
+};
 
 const JOB_TYPE_CONFIG: Record<string, { bg: string; text: string; dot: string }> = {
   'full-time': {
@@ -96,12 +144,18 @@ function getCompanyInitials(name: string): string {
 export default function JobCard({
   job,
   hasApplied,
+  applicationStatus,
   onAppliedSuccess,
   index = 0,
+  isSaved: isSavedProp,
+  onToggleSave,
 }: JobCardProps) {
   const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
+  const [localSaved, setLocalSaved] = useState(false);
+
+  // Use prop if provided, otherwise fall back to local state
+  const isSaved = isSavedProp !== undefined ? isSavedProp : localSaved;
 
   const typeKey = (job.job_type || 'full-time').toLowerCase();
   const typeConfig = JOB_TYPE_CONFIG[typeKey] || JOB_TYPE_CONFIG['full-time'];
@@ -126,7 +180,11 @@ export default function JobCard({
   const handleSave = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsSaved(!isSaved);
+    if (onToggleSave) {
+      onToggleSave(job.id);
+    } else {
+      setLocalSaved(!localSaved);
+    }
   };
 
   return (
@@ -329,14 +387,24 @@ export default function JobCard({
 
               {/* Right: Action */}
               {hasApplied ? (
-                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl
-                  bg-emerald-50 dark:bg-emerald-900/20
-                  text-xs font-bold text-emerald-600 dark:text-emerald-400
-                  border border-emerald-200/50 dark:border-emerald-700/30"
-                >
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  Applied
-                </span>
+                (() => {
+                  const statusKey = (applicationStatus || 'applied').toLowerCase();
+                  const config = STATUS_CONFIG[statusKey] || STATUS_CONFIG.applied;
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border ${config.bg} ${config.text} ${
+                      statusKey === 'applied' ? 'border-emerald-200/50 dark:border-emerald-700/30' :
+                      statusKey === 'screening' ? 'border-blue-200/50 dark:border-blue-700/30' :
+                      statusKey === 'interview' ? 'border-violet-200/50 dark:border-violet-700/30' :
+                      statusKey === 'offer' ? 'border-amber-200/50 dark:border-amber-700/30' :
+                      statusKey === 'hired' ? 'border-green-200/50 dark:border-green-700/30' :
+                      statusKey === 'rejected' ? 'border-red-200/50 dark:border-red-700/30' :
+                      'border-gray-200/50 dark:border-gray-700/30'
+                    }`}>
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      {config.label}
+                    </span>
+                  );
+                })()
               ) : (
                 <button
                   type="button"

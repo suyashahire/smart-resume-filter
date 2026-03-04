@@ -25,6 +25,9 @@ class EventType(str, Enum):
     NEW_MESSAGE = "new_message"
     APPLICATION_STATUS_CHANGED = "application_status_changed"
     CONNECTION_ESTABLISHED = "connection_established"
+    TYPING_STARTED = "typing_started"
+    TYPING_STOPPED = "typing_stopped"
+    MESSAGES_READ = "messages_read"
 
 
 class ConnectionManager:

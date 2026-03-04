@@ -958,6 +958,75 @@ async def download_candidate_resume(
     )
 
 
+# ==================== Dashboard Stats ====================
+
+@router.get("/dashboard/stats")
+async def get_dashboard_stats(
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Get aggregated dashboard statistics for the current candidate.
+    Returns counts by application status plus upcoming interviews.
+    """
+    candidate_id = str(current_user.id)
+    
+    # Count applications by status using aggregation
+    all_apps = await Application.find(
+        {"candidate_id": candidate_id}
+    ).to_list()
+
+    total = len(all_apps)
+    counts = {
+        "applied": 0,
+        "screening": 0,
+        "interview": 0,
+        "offer": 0,
+        "hired": 0,
+        "rejected": 0,
+    }
+    
+    upcoming_interviews = []
+    
+    for app in all_apps:
+        status_val = app.status.value if hasattr(app.status, 'value') else str(app.status)
+        if status_val in counts:
+            counts[status_val] += 1
+        
+        # Collect apps in interview stage for "upcoming interviews"
+        if status_val == "interview":
+            # Try to get job title
+            job_title = app.job_title if hasattr(app, 'job_title') and app.job_title else None
+            company = app.company if hasattr(app, 'company') and app.company else None
+            if not job_title:
+                try:
+                    job = await JobDescription.get(app.job_id)
+                    if job:
+                        job_title = job.title
+                        company = job.company
+                except Exception:
+                    job_title = "Unknown Position"
+            
+            upcoming_interviews.append({
+                "application_id": str(app.id),
+                "job_id": app.job_id,
+                "job_title": job_title or "Unknown Position",
+                "company": company,
+                "applied_at": app.applied_at.isoformat() if app.applied_at else None,
+                "updated_at": app.updated_at.isoformat() if app.updated_at else None,
+            })
+
+    return {
+        "total": total,
+        "pending": counts["applied"],
+        "screening": counts["screening"],
+        "interview": counts["interview"],
+        "offers": counts["offer"],
+        "hired": counts["hired"],
+        "rejected": counts["rejected"],
+        "upcoming_interviews": upcoming_interviews,
+    }
+
+
 # ==================== Profile ====================
 
 @router.get("/profile")
@@ -1017,3 +1086,51 @@ async def update_profile(
             "email": current_user.email,
         }
     }
+
+
+# ==================== Saved / Bookmarked Jobs ====================
+
+@router.post("/jobs/{job_id}/save")
+async def save_job(
+    job_id: str,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Save/bookmark a job for later.
+    """
+    job = await JobDescription.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job_id not in current_user.saved_jobs:
+        current_user.saved_jobs.append(job_id)
+        current_user.updated_at = datetime.utcnow()
+        await current_user.save()
+
+    return {"message": "Job saved", "saved_jobs": current_user.saved_jobs}
+
+
+@router.delete("/jobs/{job_id}/save")
+async def unsave_job(
+    job_id: str,
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Remove a saved/bookmarked job.
+    """
+    if job_id in current_user.saved_jobs:
+        current_user.saved_jobs.remove(job_id)
+        current_user.updated_at = datetime.utcnow()
+        await current_user.save()
+
+    return {"message": "Job unsaved", "saved_jobs": current_user.saved_jobs}
+
+
+@router.get("/jobs/saved")
+async def get_saved_jobs(
+    current_user: User = Depends(require_candidate),
+):
+    """
+    Get list of saved job IDs for the current candidate.
+    """
+    return {"saved_jobs": current_user.saved_jobs}

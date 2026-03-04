@@ -293,6 +293,19 @@ async def mark_as_read(
     
     await conversation.save()
     
+    # Broadcast read receipt to the other user so their UI updates check marks
+    other_user_id = get_other_user_id(conversation, current_user)
+    manager = get_connection_manager()
+    await manager.broadcast_event(
+        EventType.MESSAGES_READ,
+        {
+            "conversation_id": conversation_id,
+            "read_by": user_id,
+            "read_at": datetime.utcnow().isoformat(),
+        },
+        user_id=other_user_id,
+    )
+    
     return {"message": "Messages marked as read"}
 
 
@@ -363,3 +376,45 @@ async def delete_conversation(
     await conversation.save()
     
     return {"message": "Conversation deleted"}
+
+
+# ==================== Typing Indicator ====================
+
+@router.post("/typing/{conversation_id}")
+async def send_typing_indicator(
+    conversation_id: str,
+    is_typing: bool = True,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Broadcast a typing indicator to the other user in the conversation.
+    """
+    conversation = await DirectConversation.get(conversation_id)
+    
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    user_id = str(current_user.id)
+    if user_id != conversation.hr_user_id and user_id != conversation.candidate_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this conversation"
+        )
+    
+    other_user_id = get_other_user_id(conversation, current_user)
+    manager = get_connection_manager()
+    event_type = EventType.TYPING_STARTED if is_typing else EventType.TYPING_STOPPED
+    await manager.broadcast_event(
+        event_type,
+        {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "user_name": current_user.name,
+        },
+        user_id=other_user_id,
+    )
+    
+    return {"message": "Typing indicator sent"}

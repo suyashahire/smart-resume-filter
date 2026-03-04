@@ -1,23 +1,60 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart3, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
+
+function useDarkMode() {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const html = document.documentElement;
+    const check = () => setIsDark(html.classList.contains('dark'));
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(html, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+function EmptyChartState({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[300px] text-gray-400 dark:text-gray-500 gap-3">
+      <Icon className="h-12 w-12 opacity-40" />
+      <p className="text-sm font-medium">{message}</p>
+    </div>
+  );
+}
 
 interface SkillsChartProps {
   data: { skill: string; count: number }[];
 }
 
 export function SkillsDistributionChart({ data }: SkillsChartProps) {
+  const isDark = useDarkMode();
   const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+
+  if (!data || data.length === 0) {
+    return <EmptyChartState icon={BarChart3} message="No skills data available" />;
+  }
 
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="skill" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-        <Bar dataKey="count" fill="#3b82f6" />
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} stroke={isDark ? '#374151' : '#e5e7eb'} />
+        <XAxis dataKey="skill" tick={{ fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 12 }} axisLine={{ stroke: isDark ? '#4b5563' : '#e5e7eb' }} />
+        <YAxis tick={{ fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 12 }} axisLine={{ stroke: isDark ? '#4b5563' : '#e5e7eb' }} />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            border: `1px solid ${isDark ? '#4b5563' : '#e5e7eb'}`,
+            borderRadius: '12px',
+            color: isDark ? '#f3f4f6' : '#111827',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
+        />
+        <Legend wrapperStyle={{ color: isDark ? '#d1d5db' : '#374151' }} />
+        <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -28,6 +65,7 @@ interface ScoreDistributionProps {
 }
 
 export function ScoreDistributionChart({ data }: ScoreDistributionProps) {
+  const isDark = useDarkMode();
   // Define colors for each range (in order: 0-44, 45-59, 60-74, 75-100)
   const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6'];
   
@@ -64,7 +102,7 @@ export function ScoreDistributionChart({ data }: ScoreDistributionProps) {
       <text
         x={x}
         y={y}
-        fill={colorMap[range] || '#666'}
+        fill={isDark ? '#d1d5db' : (colorMap[range] || '#666')}
         textAnchor={x > cx ? 'start' : 'end'}
         dominantBaseline="central"
         fontSize={14}
@@ -77,11 +115,7 @@ export function ScoreDistributionChart({ data }: ScoreDistributionProps) {
 
   // If no data has counts, show a message
   if (filteredData.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-[300px] text-gray-500">
-        No score data available
-      </div>
-    );
+    return <EmptyChartState icon={PieChartIcon} message="No score data available" />;
   }
 
   return (
@@ -107,6 +141,13 @@ export function ScoreDistributionChart({ data }: ScoreDistributionProps) {
             const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
             return [`${value} candidates (${percent}%)`, 'Count'];
           }}
+          contentStyle={{
+            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            border: `1px solid ${isDark ? '#4b5563' : '#e5e7eb'}`,
+            borderRadius: '12px',
+            color: isDark ? '#f3f4f6' : '#111827',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
         />
         <Legend 
           formatter={(value) => {
@@ -114,6 +155,7 @@ export function ScoreDistributionChart({ data }: ScoreDistributionProps) {
             const percent = total > 0 && item ? ((item.count / total) * 100).toFixed(0) : 0;
             return `${value}: ${percent}%`;
           }}
+          wrapperStyle={{ color: isDark ? '#d1d5db' : '#374151' }}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -125,6 +167,12 @@ interface PerformanceTrendProps {
 }
 
 export function PerformanceTrendChart({ data }: PerformanceTrendProps) {
+  const isDark = useDarkMode();
+
+  if (!data || data.length === 0) {
+    return <EmptyChartState icon={TrendingUp} message="No performance data available" />;
+  }
+
   // Gradient colors based on score
   const getBarColor = (score: number) => {
     if (score >= 75) return '#10b981'; // green
@@ -136,27 +184,28 @@ export function PerformanceTrendChart({ data }: PerformanceTrendProps) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} barCategoryGap="20%">
-        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} stroke={isDark ? '#374151' : '#e5e7eb'} />
         <XAxis 
           dataKey="name" 
-          tick={{ fill: '#6b7280', fontSize: 12 }}
-          axisLine={{ stroke: '#e5e7eb' }}
+          tick={{ fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 12 }}
+          axisLine={{ stroke: isDark ? '#4b5563' : '#e5e7eb' }}
         />
         <YAxis 
           domain={[0, 100]}
-          tick={{ fill: '#6b7280', fontSize: 12 }}
-          axisLine={{ stroke: '#e5e7eb' }}
+          tick={{ fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 12 }}
+          axisLine={{ stroke: isDark ? '#4b5563' : '#e5e7eb' }}
         />
         <Tooltip 
           formatter={(value: number) => [`${value}%`, 'Score']}
           contentStyle={{ 
-            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-            border: '1px solid #e5e7eb',
+            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
+            border: `1px solid ${isDark ? '#4b5563' : '#e5e7eb'}`,
             borderRadius: '12px',
+            color: isDark ? '#f3f4f6' : '#111827',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
           }}
         />
-        <Legend />
+        <Legend wrapperStyle={{ color: isDark ? '#d1d5db' : '#374151' }} />
         <Bar 
           dataKey="score" 
           name="Match Score"

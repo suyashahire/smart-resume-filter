@@ -933,3 +933,54 @@ async def update_application_status(
         "old_status": old_status.value,
     }
 
+
+@router.get("/applications/by-status/{app_status}")
+async def get_applications_by_status(
+    app_status: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get all applications with a specific status for jobs owned by this user.
+    Used by calendar to show upcoming interviews.
+    """
+    # Find all jobs owned by the current user
+    user_jobs = await JobDescription.find(
+        {"user_id": str(current_user.id)}
+    ).to_list()
+    job_ids = [str(j.id) for j in user_jobs]
+    job_map = {str(j.id): j for j in user_jobs}
+
+    if not job_ids:
+        return []
+
+    # Find applications with the requested status for those jobs
+    applications = await Application.find(
+        {"job_id": {"$in": job_ids}, "status": app_status}
+    ).sort(-Application.updated_at).to_list()
+
+    results = []
+    for app in applications:
+        job = job_map.get(app.job_id)
+        # Try to get candidate info
+        candidate_name = app.candidate_name if hasattr(app, 'candidate_name') and app.candidate_name else None
+        if not candidate_name and hasattr(app, 'candidate_id') and app.candidate_id:
+            try:
+                from app.models.user import User as UserModel
+                candidate = await UserModel.get(app.candidate_id)
+                if candidate:
+                    candidate_name = candidate.name
+            except Exception:
+                pass
+
+        results.append({
+            "id": str(app.id),
+            "job_id": app.job_id,
+            "job_title": job.title if job else "Unknown",
+            "candidate_name": candidate_name or "Candidate",
+            "status": app.status.value if hasattr(app.status, 'value') else str(app.status),
+            "applied_at": app.applied_at.isoformat() if app.applied_at else None,
+            "updated_at": app.updated_at.isoformat() if app.updated_at else None,
+        })
+
+    return results
+

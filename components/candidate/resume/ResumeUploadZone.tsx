@@ -123,7 +123,7 @@ export default function ResumeUploadZone({
               {hasResume ? 'Update your resume' : 'Upload your resume'}
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-sm">
-              Drag and drop your file here, or click to browse. We'll use it for your applications.
+              Drag and drop your file here, or click to browse. We&apos;ll use it for your applications.
             </p>
             <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-candidate-500 hover:bg-candidate-600 dark:bg-candidate-600 dark:hover:bg-candidate-500 text-white shadow-sm shadow-candidate-500/20 transition-colors pointer-events-none">
               <Upload className="h-4 w-4" />

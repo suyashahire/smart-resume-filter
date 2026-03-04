@@ -8,7 +8,8 @@ import {
   Download, LogOut, Save, Eye, EyeOff, Check, AlertCircle,
   FileText, Briefcase, Clock, ChevronRight, KeyRound,
   Activity, Palette, Smartphone, Globe, History, Zap,
-  CheckCircle2, XCircle, AlertTriangle, Building
+  CheckCircle2, XCircle, AlertTriangle, Building,
+  Users, MessageSquare, Upload, BellRing
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -119,9 +120,20 @@ function ProfileContent() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [screeningAlerts, setScreeningAlerts] = useState(true);
-  const [weeklyReports, setWeeklyReports] = useState(false);
+  // Notification preferences — default all ON
+  const defaultNotifPrefs: Record<string, boolean> = {
+    resume_uploads: true,
+    candidate_scoring: true,
+    new_applications: true,
+    messages: true,
+    job_updates: true,
+    interviews: true,
+  };
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(
+    () => ({ ...defaultNotifPrefs, ...(user?.notification_preferences || {}) })
+  );
+  const [savingNotifPrefs, setSavingNotifPrefs] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: string; message: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
@@ -130,7 +142,7 @@ function ProfileContent() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['profile', 'security', 'preferences', 'activity'].includes(tab)) {
+    if (tab && ['profile', 'notifications', 'security', 'preferences', 'activity'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -201,6 +213,7 @@ function ProfileContent() {
 
   const tabs = [
     { id: 'profile', name: 'Profile', icon: User, color: 'from-cyan-500 to-blue-500' },
+    { id: 'notifications', name: 'Notifications', icon: BellRing, color: 'from-rose-500 to-orange-500' },
     { id: 'security', name: 'Security', icon: Shield, color: 'from-amber-500 to-orange-500' },
     { id: 'preferences', name: 'Preferences', icon: Palette, color: 'from-purple-500 to-pink-500' },
     { id: 'activity', name: 'Activity', icon: Activity, color: 'from-emerald-500 to-teal-500' },
@@ -353,6 +366,74 @@ function ProfileContent() {
                           <p className="text-white font-semibold">{item.value}</p>
                         </div>
                       ))}
+                    </div>
+                  </GlassCard>
+                </motion.div>
+              )}
+
+              {/* ═══════ NOTIFICATIONS TAB ═══════ */}
+              {activeTab === 'notifications' && (
+                <motion.div key="notifications" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="space-y-6">
+                  <GlassCard>
+                    <SectionHeading icon={BellRing} title="Notification Preferences" subtitle="Choose which real-time notifications you want to receive" iconColor="text-rose-400" />
+
+                    <div className="space-y-3">
+                      {[
+                        { key: 'resume_uploads', label: 'Resume Uploads', desc: 'When new resumes are uploaded to the system', icon: Upload, color: 'cyan', borderColor: 'border-l-cyan-500' },
+                        { key: 'candidate_scoring', label: 'Candidate Scoring', desc: 'When candidates are scored / screened against jobs', icon: Zap, color: 'amber', borderColor: 'border-l-amber-500' },
+                        { key: 'new_applications', label: 'New Applications', desc: 'When candidates apply for your jobs', icon: Briefcase, color: 'emerald', borderColor: 'border-l-emerald-500' },
+                        { key: 'messages', label: 'Messages', desc: 'When you receive new messages from candidates', icon: MessageSquare, color: 'purple', borderColor: 'border-l-purple-500' },
+                        { key: 'job_updates', label: 'Job Updates', desc: 'When jobs are created or deleted', icon: Building, color: 'cyan', borderColor: 'border-l-cyan-500' },
+                        { key: 'interviews', label: 'Interviews', desc: 'When interview analyses are completed', icon: Clock, color: 'amber', borderColor: 'border-l-amber-500' },
+                      ].map((item) => (
+                        <div key={item.key} className={`flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] border-l-2 ${item.borderColor}`}>
+                          <div className="flex items-center gap-4">
+                            <div className={`w-9 h-9 rounded-lg bg-${item.color}-500/10 flex items-center justify-center text-${item.color}-400`}>
+                              <item.icon className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-white">{item.label}</p>
+                              <p className="text-xs text-gray-500">{item.desc}</p>
+                            </div>
+                          </div>
+                          <Toggle
+                            enabled={notifPrefs[item.key] !== false}
+                            onChange={() => setNotifPrefs(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                            accentColor={item.color}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="flex justify-end mt-6">
+                      <button
+                        onClick={async () => {
+                          setSavingNotifPrefs(true);
+                          try {
+                            const { updateNotificationPreferences } = await import('@/lib/api');
+                            await updateNotificationPreferences(notifPrefs);
+                            if (user) {
+                              setUser({ ...user, notification_preferences: notifPrefs });
+                            }
+                            setSaveStatus({ type: 'success', message: 'Notification preferences saved!' });
+                          } catch {
+                            setSaveStatus({ type: 'error', message: 'Failed to save notification preferences' });
+                          } finally {
+                            setSavingNotifPrefs(false);
+                            setTimeout(() => setSaveStatus(null), 3000);
+                          }
+                        }}
+                        disabled={savingNotifPrefs}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm bg-gradient-to-r from-rose-500 to-orange-500 text-white hover:shadow-lg hover:shadow-rose-500/25 transition-all duration-300 disabled:opacity-50"
+                      >
+                        {savingNotifPrefs ? (
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                        {savingNotifPrefs ? 'Saving...' : 'Save Preferences'}
+                      </button>
                     </div>
                   </GlassCard>
                 </motion.div>
@@ -514,30 +595,7 @@ function ProfileContent() {
                     </div>
                   </GlassCard>
 
-                  {/* Notifications */}
-                  <GlassCard>
-                    <SectionHeading icon={Bell} title="Notifications" subtitle="Choose what you want to be notified about" iconColor="text-amber-400" />
-                    <div className="space-y-3">
-                      {[
-                        { label: 'Email Notifications', desc: 'Receive email updates about your activity', enabled: emailNotifications, toggle: () => setEmailNotifications(!emailNotifications), icon: Mail, color: 'cyan', borderColor: 'border-l-cyan-500' },
-                        { label: 'Screening Alerts', desc: 'Get notified when screening is complete', enabled: screeningAlerts, toggle: () => setScreeningAlerts(!screeningAlerts), icon: Bell, color: 'amber', borderColor: 'border-l-amber-500' },
-                        { label: 'Weekly Reports', desc: 'Receive weekly summary of recruitment activity', enabled: weeklyReports, toggle: () => setWeeklyReports(!weeklyReports), icon: FileText, color: 'purple', borderColor: 'border-l-purple-500' },
-                      ].map((item) => (
-                        <div key={item.label} className={`flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] border-l-2 ${item.borderColor}`}>
-                          <div className="flex items-center gap-4">
-                            <div className={`w-9 h-9 rounded-lg bg-${item.color}-500/10 flex items-center justify-center text-${item.color}-400`}>
-                              <item.icon className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-white">{item.label}</p>
-                              <p className="text-xs text-gray-500">{item.desc}</p>
-                            </div>
-                          </div>
-                          <Toggle enabled={item.enabled} onChange={item.toggle} accentColor={item.color} />
-                        </div>
-                      ))}
-                    </div>
-                  </GlassCard>
+                  {/* Notifications — moved to dedicated Notifications tab */}
 
                   {/* Data & Privacy */}
                   <GlassCard>

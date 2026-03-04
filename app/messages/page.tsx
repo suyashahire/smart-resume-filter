@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import * as api from "@/lib/api";
+import { MessagesSkeleton } from "@/components/ui/Skeleton";
 
 // ============================================================================
 // INTERFACES
@@ -34,7 +35,7 @@ interface Message {
   receiver_id: string;
   content: string;
   sent_at: string;
-  read_at: string | null;
+  read_at?: string | null;
 }
 
 interface Conversation {
@@ -325,8 +326,11 @@ function HRMessagesContent() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [candidateHandled, setCandidateHandled] = useState(false);
+  const [showTypingIndicator, setShowTypingIndicator] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
 
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
@@ -337,7 +341,7 @@ function HRMessagesContent() {
     userId: user?.id,
     enabled: isAuthenticated && isHydrated,
     onEvent: useCallback(
-      (event) => {
+      (event: any) => {
         if (event.type === "new_message") {
           const data = event.data as any;
           const currentConv = selectedConversationRef.current;
@@ -372,6 +376,30 @@ function HRMessagesContent() {
               setConversations(hrConversations);
             })
             .catch(() => {});
+        }
+
+        // Typing indicator events
+        if (event.type === "typing_started" || event.type === "typing_stopped") {
+          const data = event.data as any;
+          const currentConv = selectedConversationRef.current;
+          if (currentConv && data.conversation_id === currentConv.id) {
+            setShowTypingIndicator(event.type === "typing_started");
+          }
+        }
+
+        // Read receipts — update check marks in real-time
+        if (event.type === "messages_read") {
+          const data = event.data as any;
+          const currentConv = selectedConversationRef.current;
+          if (currentConv && data.conversation_id === currentConv.id) {
+            // Re-fetch messages to get updated read_at timestamps
+            api
+              .getConversationMessages(currentConv.id)
+              .then((res) => {
+                setCurrentConversationMessages(res.messages || []);
+              })
+              .catch(() => {});
+          }
         }
       },
       [setConversations, setCurrentConversationMessages]
@@ -584,12 +612,8 @@ function HRMessagesContent() {
     0
   );
 
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 border-3 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-      </div>
-    );
+  if (!isHydrated || isLoading) {
+    return <MessagesSkeleton />;
   }
 
   return (
@@ -846,11 +870,56 @@ function HRMessagesContent() {
                   )}
                 </AnimatePresence>
 
+                {/* Typing Indicator */}
+                <AnimatePresence>
+                  {showTypingIndicator && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 5 }}
+                      className="px-4 py-2"
+                    >
+                      <div className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400">
+                        <span className="flex gap-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
+                        <span>{selectedConversation?.candidate_user_name || 'Candidate'} is typing…</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Message Composer */}
                 <MessageComposer
                   value={newMessage}
-                  onChange={setNewMessage}
-                  onSubmit={handleSendMessage}
+                  onChange={(val) => {
+                    setNewMessage(val);
+                    // Emit typing indicator with debounce
+                    if (selectedConversation && selectedConversation.id !== 'new') {
+                      if (!isTypingRef.current) {
+                        isTypingRef.current = true;
+                        api.sendTypingIndicator(selectedConversation.id, true).catch(() => {});
+                      }
+                      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                      typingTimeoutRef.current = setTimeout(() => {
+                        isTypingRef.current = false;
+                        if (selectedConversation) {
+                          api.sendTypingIndicator(selectedConversation.id, false).catch(() => {});
+                        }
+                      }, 2000);
+                    }
+                  }}
+                  onSubmit={(e) => {
+                    // Stop typing indicator on send
+                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                    if (isTypingRef.current && selectedConversation && selectedConversation.id !== 'new') {
+                      isTypingRef.current = false;
+                      api.sendTypingIndicator(selectedConversation.id, false).catch(() => {});
+                    }
+                    handleSendMessage(e);
+                  }}
                   isSending={isSending}
                 />
               </>

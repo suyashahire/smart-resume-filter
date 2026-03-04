@@ -9,12 +9,15 @@ import {
   XCircle,
   CheckCircle,
   Clock,
+  ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 
 interface StatusChange {
   from_status?: string;
   to_status: string;
   changed_at: string;
+  changed_by?: string;
   note?: string;
 }
 
@@ -53,6 +56,12 @@ const statusConfig: Record<string, {
     color: 'text-candidate-600',
     bgColor: 'bg-candidate-100 dark:bg-candidate-900/30',
   },
+  pending_approval: {
+    icon: ShieldCheck,
+    label: 'Pending Approval',
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+  },
   hired: {
     icon: CheckCircle,
     label: 'Hired',
@@ -66,7 +75,7 @@ const statusConfig: Record<string, {
     bgColor: 'bg-red-100 dark:bg-red-900/30',
   },
   withdrawn: {
-    icon: XCircle,
+    icon: LogOut,
     label: 'Withdrawn',
     color: 'text-gray-600',
     bgColor: 'bg-gray-100 dark:bg-gray-900/30',
@@ -86,6 +95,34 @@ export default function ApplicationTimeline({
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const formatRelativeDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+    const diffWeek = Math.floor(diffDay / 7);
+
+    if (diffSec < 60) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay === 1) return 'yesterday';
+    if (diffDay < 7) return `${diffDay}d ago`;
+    if (diffWeek < 4) return `${diffWeek}w ago`;
+    return formatDate(dateString);
+  };
+
+  const resolveChangedBy = (changedBy?: string) => {
+    if (!changedBy) return null;
+    if (changedBy === 'system') return 'System';
+    if (changedBy === 'candidate') return 'You';
+    // If it looks like a MongoDB ObjectId, show "HR Team"
+    if (/^[a-f0-9]{24}$/.test(changedBy)) return 'HR Team';
+    return changedBy;
   };
 
   const getStatusIndex = (status: string) => {
@@ -193,14 +230,19 @@ export default function ApplicationTimeline({
                       <span className={`font-medium ${config.color}`}>
                         {config.label}
                       </span>
-                      <span className="text-xs text-gray-500 flex items-center">
+                      <span className="text-xs text-gray-500 flex items-center" title={formatDate(change.changed_at)}>
                         <Clock className="h-3 w-3 mr-1" />
-                        {formatDate(change.changed_at)}
+                        {formatRelativeDate(change.changed_at)}
                       </span>
                     </div>
                     {change.note && (
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         {change.note}
+                      </p>
+                    )}
+                    {resolveChangedBy(change.changed_by) && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                        by {resolveChangedBy(change.changed_by)}
                       </p>
                     )}
                   </div>
