@@ -2,14 +2,16 @@
 Interview routes for uploading and analyzing interview recordings.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query, Request
 from typing import List, Optional
 from datetime import datetime, timezone
 import os
+import re
 import logging
 import aiofiles
 
 from app.config import settings
+from app.utils import validate_file_magic
 from app.models.user import User
 from app.models.resume import Resume
 from app.models.interview import (
@@ -25,6 +27,9 @@ from app.services.websocket_manager import get_connection_manager, EventType
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Rate limiter
+from app.limiter import limiter
+
 # Use singleton instances for model reuse (pre-loaded at startup)
 transcription_service = get_transcription_service()
 sentiment_service = get_sentiment_service()
@@ -37,7 +42,9 @@ def validate_audio_extension(filename: str) -> bool:
 
 
 @router.post("/upload", response_model=InterviewUploadResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def upload_interview(
+    request: Request,
     resume_id: str,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
@@ -82,9 +89,19 @@ async def upload_interview(
             detail="File too large. Maximum size: 50MB"
         )
     
-    # Generate unique filename
+    # Validate file content matches extension (magic bytes)
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if not validate_file_magic(file_content, file_ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match the expected audio/video format"
+        )
+    
+    # Generate unique filename (sanitize against path traversal)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    safe_filename = f"{timestamp}_{file.filename.replace(' ', '_')}"
+    base_name = os.path.basename(file.filename)
+    sanitized_name = re.sub(r'[^\w.\-]', '_', base_name)
+    safe_filename = f"{timestamp}_{sanitized_name}"
     file_path = os.path.join(settings.UPLOAD_DIR, "interviews", safe_filename)
     
     # Save file locally
@@ -363,8 +380,8 @@ async def process_interview(
 
 @router.get("/", response_model=List[InterviewListResponse])
 async def list_interviews(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
     search: Optional[str] = Query(None, description="Search by candidate name or email"),
     min_score: Optional[float] = Query(None, description="Minimum sentiment score"),
     max_score: Optional[float] = Query(None, description="Maximum sentiment score"),

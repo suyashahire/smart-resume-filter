@@ -2,11 +2,13 @@
 Candidate routes for job browsing, applications, and profile management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Request, status, UploadFile, File, Query
 from fastapi.responses import FileResponse
 from datetime import datetime, timezone
 from typing import Optional, List
+import logging
 import os
+import re as re_module
 import uuid
 
 from app.models.user import User, UserRole, CandidateProfileUpdate
@@ -22,7 +24,15 @@ from app.services.resume_parser import get_resume_parser
 from app.services.matching import get_matching_service
 from app.models.notification import Notification, NotificationType
 from app.services.websocket_manager import get_connection_manager, EventType
+from app.limiter import limiter
+from app.utils import validate_file_magic
 from beanie import PydanticObjectId
+
+logger = logging.getLogger(__name__)
+
+def _sanitize_filename(name: str) -> str:
+    """Strip path components and replace unsafe characters."""
+    return re_module.sub(r'[^\w.\-]', '_', os.path.basename(name))
 
 def _to_object_ids(str_ids: list) -> list:
     """Convert a list of string IDs to PydanticObjectId, skipping invalid ones."""
@@ -42,8 +52,8 @@ matching_service = get_matching_service()
 
 @router.get("/jobs", response_model=List[JobDescriptionResponse])
 async def get_open_jobs(
-    skip: int = 0,
-    limit: int = 20,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
     search: Optional[str] = None,
     job_type: Optional[str] = None,
     location: Optional[str] = None,
@@ -361,8 +371,8 @@ async def apply_to_job(
 
 @router.get("/applications", response_model=ApplicationListResponse)
 async def get_my_applications(
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
     current_user: User = Depends(require_candidate),
 ):
     """
@@ -589,7 +599,9 @@ async def get_my_resume(
 
 
 @router.post("/resume")
+@limiter.limit("5/minute")
 async def upload_my_resume(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(require_candidate),
 ):
@@ -616,11 +628,18 @@ async def upload_my_resume(
             detail="File size exceeds 5MB limit"
         )
     
+    # Validate file content matches extension (magic bytes)
+    if not validate_file_magic(content, file_ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match the expected format"
+        )
+    
     # Save file to disk for parsing
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "resumes")
     os.makedirs(upload_dir, exist_ok=True)
     
-    safe_filename = f"{current_user.id}_{file.filename}"
+    safe_filename = f"{current_user.id}_{_sanitize_filename(file.filename)}"
     file_path = os.path.join(upload_dir, safe_filename)
     
     with open(file_path, "wb") as f:
@@ -634,9 +653,10 @@ async def upload_my_resume(
         # Clean up file on parse failure
         if os.path.exists(file_path):
             os.remove(file_path)
+        logger.warning("Resume parse failed for user %s: %s", current_user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to parse resume: {str(e)}"
+            detail="Failed to parse resume. Please ensure the file is a valid PDF or DOCX."
         )
     
     # Check if user already has a resume
@@ -715,7 +735,9 @@ async def get_all_my_resumes(
 
 
 @router.post("/resumes", response_model=ResumeVersionResponse)
+@limiter.limit("5/minute")
 async def upload_resume_version(
+    request: Request,
     file: UploadFile = File(...),
     version_label: Optional[str] = None,
     current_user: User = Depends(require_candidate),
@@ -753,13 +775,20 @@ async def upload_resume_version(
             detail="File size exceeds 10MB limit"
         )
     
+    # Validate file content matches extension (magic bytes)
+    if not validate_file_magic(content, file_ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match the expected format"
+        )
+    
     # Save file to disk
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "resumes")
     os.makedirs(upload_dir, exist_ok=True)
     
     # Generate unique filename
     unique_id = uuid.uuid4().hex[:8]
-    safe_filename = f"{current_user.id}_{unique_id}_{file.filename}"
+    safe_filename = f"{current_user.id}_{unique_id}_{_sanitize_filename(file.filename)}"
     file_path = os.path.join(upload_dir, safe_filename)
     
     with open(file_path, "wb") as f:
@@ -772,9 +801,10 @@ async def upload_resume_version(
     except Exception as e:
         if os.path.exists(file_path):
             os.remove(file_path)
+        logger.warning("Resume parse failed for user %s: %s", current_user.id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to parse resume: {str(e)}"
+            detail="Failed to parse resume. Please ensure the file is a valid PDF or DOCX."
         )
     
     # Determine version number

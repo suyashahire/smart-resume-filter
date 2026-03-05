@@ -5,7 +5,7 @@ Uses MatchingService (Sentence-BERT) and RAGService (ChromaDB) for real scoring.
 
 import re
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Request
 from typing import Dict, List, Optional
 from app.models.user import User
 from app.models.resume import Resume
@@ -13,6 +13,7 @@ from app.models.job import JobDescription
 from app.routes.auth import get_current_user
 from app.services.matching import get_matching_service
 from app.services.rag import RAGService
+from app.limiter import limiter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -52,7 +53,8 @@ async def check_ats_compatibility(resume_id: str, current_user: User = Depends(g
         "issues": issues or ["No major ATS issues detected."]
     }
 @router.post("/insights/{resume_id}/optimize")
-async def optimize_resume_with_ai(resume_id: str, current_user: User = Depends(get_current_user), instructions: str = Body(None)):
+@limiter.limit("10/minute")
+async def optimize_resume_with_ai(request: Request, resume_id: str, current_user: User = Depends(get_current_user), instructions: str = Body(None)):
     """
     Optimize a resume using smart heuristics and market-relevant keyword analysis.
     Uses MatchingService to identify actually-relevant missing skills from real job postings.

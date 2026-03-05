@@ -22,11 +22,13 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
       MONGO_INITDB_DATABASE: hireq
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:-changeme_app}
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
+      - ./backend/mongo-init.js:/docker-entrypoint-initdb.d/01-create-app-user.js:ro
     networks:
       - hireq-network
     healthcheck:

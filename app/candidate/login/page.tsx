@@ -573,7 +573,7 @@ export default function CandidateLoginPage() {
                 value={formData.password}
                 onChange={(v) => setFormData({ ...formData, password: v })}
                 placeholder="••••••••"
-                minLength={6}
+                minLength={isLogin ? undefined : 12}
                 endAdornment={
                   <button
                     type="button"

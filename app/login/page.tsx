@@ -804,8 +804,8 @@ export default function LoginPage() {
                     value={password}
                     onChange={setPassword}
                     placeholder="••••••••"
-                    minLength={6}
-                    hint={isRegistering ? 'Minimum 6 characters' : undefined}
+                    minLength={isRegistering ? 12 : undefined}
+                    hint={isRegistering ? 'Minimum 12 characters, must include a letter and digit' : undefined}
                     endAdornment={
                       <button
                         type="button"

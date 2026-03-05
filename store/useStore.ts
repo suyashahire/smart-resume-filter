@@ -625,7 +625,6 @@ export const useStore = create<StoreState>()(
       },
       partialize: (state) => ({
         user: state.user,
-        authToken: state.authToken,
         isAuthenticated: state.isAuthenticated,
         useRealApi: state.useRealApi,
         shortlistedIds: Array.from(state.shortlistedIds),

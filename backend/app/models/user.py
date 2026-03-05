@@ -63,6 +63,13 @@ class User(Document):
     # Saved/bookmarked jobs (for candidates)
     saved_jobs: List[str] = Field(default_factory=list)
     
+    # Token revocation: increment to invalidate all existing JWTs
+    token_version: int = Field(default=0)
+    
+    # Brute-force protection
+    failed_login_attempts: int = Field(default=0)
+    locked_until: Optional[datetime] = None
+    
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
@@ -93,7 +100,7 @@ class UserCreate(BaseModel):
     """Schema for creating a new user."""
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=12)
     role: UserRole = UserRole.HR_MANAGER
     company: Optional[str] = None
 
@@ -132,11 +139,14 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    """Schema for updating user details."""
+    """Schema for updating user details.
+    
+    Note: `role` and `is_active` are intentionally excluded to prevent
+    privilege-escalation via the self-service PUT /api/auth/me endpoint.
+    Only admins can change roles/active status through dedicated admin routes.
+    """
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     email: Optional[EmailStr] = None
-    role: Optional[UserRole] = None
-    is_active: Optional[bool] = None
     company: Optional[str] = None
     notification_preferences: Optional[Dict[str, bool]] = None
 

@@ -15,6 +15,7 @@ Usage:
 import logging
 from typing import Optional
 from abc import ABC, abstractmethod
+from html import escape as html_escape
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +72,10 @@ class ResendEmailService(EmailService):
                 "subject": subject,
                 "html": html
             })
-            logger.info(f"Email sent successfully to {to}")
+            logger.info("Email sent successfully to %s", to[:3] + "***")
             return True
         except Exception as e:
-            logger.error(f"Failed to send email to {to}: {e}")
+            logger.error("Failed to send email: %s", type(e).__name__)
             return False
 
 
@@ -88,8 +89,8 @@ class MockEmailService(EmailService):
         html: str,
         from_email: Optional[str] = None
     ) -> bool:
-        logger.info(f"[MOCK EMAIL] To: {to}, Subject: {subject}")
-        logger.debug(f"[MOCK EMAIL] HTML: {html[:200]}...")
+        logger.info("[MOCK EMAIL] To: %s, Subject: %s", to[:3] + "***", subject)
+        logger.debug("[MOCK EMAIL] HTML: %s...", html[:200])
         return True
 
 
@@ -161,8 +162,9 @@ class HireQEmailService:
     
     async def send_welcome_email(self, to: str, name: str) -> bool:
         """Send welcome email to new user."""
+        safe_name = html_escape(name)
         content = f"""
-        <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Welcome to HireQ, {name}! 🎉</h2>
+        <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Welcome to HireQ, {safe_name}! 🎉</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             Thank you for joining our AI-powered recruitment platform. We're excited to help you find your perfect opportunity!
         </p>
@@ -187,18 +189,21 @@ class HireQEmailService:
     
     async def send_application_received(self, to: str, name: str, job_title: str, company: str) -> bool:
         """Send confirmation when application is received."""
+        safe_name = html_escape(name)
+        safe_title = html_escape(job_title)
+        safe_company = html_escape(company)
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Application Received ✓</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {name},
+            Hi {safe_name},
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             Your application has been successfully submitted!
         </p>
         <div style="background-color: #f0fdfa; border-left: 4px solid #0d9488; padding: 20px; margin: 0 0 30px 0; border-radius: 0 8px 8px 0;">
             <p style="color: #0d9488; font-size: 14px; margin: 0 0 5px 0; font-weight: 600;">Position</p>
-            <p style="color: #111827; font-size: 18px; margin: 0; font-weight: bold;">{job_title}</p>
-            <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">{company}</p>
+            <p style="color: #111827; font-size: 18px; margin: 0; font-weight: bold;">{safe_title}</p>
+            <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">{safe_company}</p>
         </div>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             The hiring team will review your application and get back to you soon. You can track your application status in your dashboard.
@@ -266,20 +271,23 @@ class HireQEmailService:
         
         custom_message = ""
         if message:
+            safe_message = html_escape(message)
             custom_message = f"""
             <div style="background-color: #f9fafb; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #e5e7eb;">
-                <p style="color: #374151; font-size: 14px; margin: 0; font-style: italic;">"{message}"</p>
+                <p style="color: #374151; font-size: 14px; margin: 0; font-style: italic;">"{safe_message}"</p>
             </div>
             """
         
+        safe_name = html_escape(name)
+        safe_title = html_escape(job_title)
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">{config['emoji']} {config['title']}</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {name},
+            Hi {safe_name},
         </p>
         <div style="background-color: #f0fdfa; border-left: 4px solid {config['color']}; padding: 20px; margin: 0 0 20px 0; border-radius: 0 8px 8px 0;">
             <p style="color: #6b7280; font-size: 14px; margin: 0 0 5px 0;">Position</p>
-            <p style="color: #111827; font-size: 18px; margin: 0; font-weight: bold;">{job_title}</p>
+            <p style="color: #111827; font-size: 18px; margin: 0; font-weight: bold;">{safe_title}</p>
         </div>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             {config['message']}
@@ -308,24 +316,28 @@ class HireQEmailService:
         
         job_context = ""
         if job_title:
+            safe_jt = html_escape(job_title)
             job_context = f"""
             <p style="color: #6b7280; font-size: 14px; margin: 0 0 10px 0;">
-                Regarding: <strong>{job_title}</strong>
+                Regarding: <strong>{safe_jt}</strong>
             </p>
             """
         
+        safe_recipient = html_escape(recipient_name)
+        safe_sender = html_escape(sender_name)
+        safe_preview = html_escape(message_preview[:200])
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">New Message 💬</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {recipient_name},
+            Hi {safe_recipient},
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            You have a new message from <strong>{sender_name}</strong>:
+            You have a new message from <strong>{safe_sender}</strong>:
         </p>
         {job_context}
         <div style="background-color: #f9fafb; padding: 20px; margin: 0 0 30px 0; border-radius: 8px; border: 1px solid #e5e7eb;">
             <p style="color: #374151; font-size: 16px; margin: 0; line-height: 1.6;">
-                "{message_preview[:200]}{'...' if len(message_preview) > 200 else ''}"
+                "{safe_preview}{'...' if len(message_preview) > 200 else ''}"
             </p>
         </div>
         <a href="{self.frontend_url}/candidate/messages" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
@@ -350,10 +362,16 @@ class HireQEmailService:
         interview_type: str = "Video Call"
     ) -> bool:
         """Send interview reminder email."""
+        safe_name = html_escape(name)
+        safe_title = html_escape(job_title)
+        safe_company = html_escape(company)
+        safe_date = html_escape(interview_date)
+        safe_time = html_escape(interview_time)
+        safe_type = html_escape(interview_type)
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Interview Reminder 📅</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {name},
+            Hi {safe_name},
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             This is a friendly reminder about your upcoming interview.
@@ -363,27 +381,27 @@ class HireQEmailService:
                 <tr>
                     <td width="50%" style="padding: 10px 0;">
                         <p style="color: #6b7280; font-size: 12px; margin: 0 0 5px 0; text-transform: uppercase;">Position</p>
-                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{job_title}</p>
+                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{safe_title}</p>
                     </td>
                     <td width="50%" style="padding: 10px 0;">
                         <p style="color: #6b7280; font-size: 12px; margin: 0 0 5px 0; text-transform: uppercase;">Company</p>
-                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{company}</p>
+                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{safe_company}</p>
                     </td>
                 </tr>
                 <tr>
                     <td width="50%" style="padding: 10px 0;">
                         <p style="color: #6b7280; font-size: 12px; margin: 0 0 5px 0; text-transform: uppercase;">Date</p>
-                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{interview_date}</p>
+                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{safe_date}</p>
                     </td>
                     <td width="50%" style="padding: 10px 0;">
                         <p style="color: #6b7280; font-size: 12px; margin: 0 0 5px 0; text-transform: uppercase;">Time</p>
-                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{interview_time}</p>
+                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{safe_time}</p>
                     </td>
                 </tr>
                 <tr>
                     <td colspan="2" style="padding: 10px 0;">
                         <p style="color: #6b7280; font-size: 12px; margin: 0 0 5px 0; text-transform: uppercase;">Interview Type</p>
-                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{interview_type}</p>
+                        <p style="color: #111827; font-size: 16px; margin: 0; font-weight: bold;">{safe_type}</p>
                     </td>
                 </tr>
             </table>
@@ -410,10 +428,11 @@ class HireQEmailService:
     
     async def send_account_approved(self, to: str, name: str) -> bool:
         """Send account approved notification email."""
+        safe_name = html_escape(name)
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Account Approved! 🎉</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {name},
+            Hi {safe_name},
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             Great news! Your HireQ account has been approved by our admin team. You now have full access to the platform.
@@ -439,17 +458,19 @@ class HireQEmailService:
     
     async def send_account_rejected(self, to: str, name: str, reason: str) -> bool:
         """Send account rejected notification email."""
+        safe_name = html_escape(name)
+        safe_reason = html_escape(reason)
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Account Update</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {name},
+            Hi {safe_name},
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             Thank you for your interest in HireQ. After reviewing your account request, our admin team was unable to approve it at this time.
         </p>
         <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; margin: 0 0 30px 0; border-radius: 0 8px 8px 0;">
             <p style="color: #ef4444; font-size: 14px; margin: 0 0 5px 0; font-weight: 600;">Reason</p>
-            <p style="color: #374151; font-size: 16px; margin: 0;">{reason}</p>
+            <p style="color: #374151; font-size: 16px; margin: 0;">{safe_reason}</p>
         </div>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             If you believe this was a mistake or have questions, please contact our support team.
@@ -464,10 +485,11 @@ class HireQEmailService:
     
     async def send_password_reset(self, to: str, name: str, reset_link: str) -> bool:
         """Send password reset email."""
+        safe_name = html_escape(name)
         content = f"""
         <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 24px;">Reset Your Password 🔐</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            Hi {name},
+            Hi {safe_name},
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
             We received a request to reset your password. Click the button below to create a new password:

@@ -2,6 +2,7 @@
 Authentication routes for user registration, login, and management.
 """
 
+import logging
 import re
 from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -18,6 +19,11 @@ from app.models.user import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Account lockout settings
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -37,7 +43,7 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token."""
+    """Create a JWT access token with token_version for revocation support."""
     to_encode = data.copy()
     
     if expires_delta:
@@ -62,6 +68,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
+        token_ver: int = payload.get("tv", 0)
         
         if user_id is None:
             raise credentials_exception
@@ -74,6 +81,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     user = await User.get(token_data.user_id)
     
     if user is None:
+        raise credentials_exception
+    
+    # Check token version for revocation
+    if token_ver != getattr(user, 'token_version', 0):
         raise credentials_exception
     
     if not user.is_active:
@@ -115,6 +126,73 @@ require_hr_or_admin = require_role(UserRole.HR_MANAGER, UserRole.ADMIN)
 from app.limiter import limiter
 
 
+async def _authenticate_user(email: str, password: str, request: Request) -> tuple[User, str]:
+    """Shared authentication logic with lockout, logging, and token_version.
+    
+    Returns (user, access_token) on success.
+    Raises HTTPException on failure.
+    """
+    user = await User.find_one(User.email == email)
+    
+    # Check account lockout
+    if user and user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        remaining = int((user.locked_until - datetime.now(timezone.utc)).total_seconds() / 60) + 1
+        logger.warning("auth.login_locked email=%s remaining_min=%d", email[:3] + "***", remaining)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account temporarily locked. Try again in {remaining} minute(s)."
+        )
+    
+    if not user or not verify_password(password, user.password_hash):
+        # Increment failed attempts
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+                logger.warning("auth.account_locked email=%s attempts=%d", email[:3] + "***", user.failed_login_attempts)
+            await user.save()
+        logger.warning("auth.login_failed email=%s ip=%s", email[:3] + "***", request.client.host if request.client else "unknown")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Check account status
+    if user.account_status == AccountStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending admin approval. You'll receive an email once approved."
+        )
+    
+    if user.account_status == AccountStatus.REJECTED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account application was not approved. Contact support for details."
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled"
+        )
+    
+    # Reset failed attempts on successful login
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.last_login = datetime.now(timezone.utc)
+    await user.save()
+    
+    # Create access token with token_version
+    access_token = create_access_token(data={
+        "sub": str(user.id),
+        "tv": getattr(user, 'token_version', 0),
+    })
+    
+    logger.info("auth.login_success user_id=%s role=%s", str(user.id), user.role.value)
+    return user, access_token
+
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")
 async def register(request: Request, user_data: UserCreate):
@@ -136,8 +214,8 @@ async def register(request: Request, user_data: UserCreate):
     
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Registration failed. If this email is already in use, please log in instead."
         )
     
     # Prevent self-registration as admin
@@ -171,6 +249,8 @@ async def register(request: Request, user_data: UserCreate):
     
     await user.insert()
     
+    logger.info("auth.register user_id=%s role=%s", str(user.id), user.role.value)
+    
     # For pending accounts, don't return a token
     if account_status == AccountStatus.PENDING:
         # Return a special response indicating pending status
@@ -191,7 +271,7 @@ async def register(request: Request, user_data: UserCreate):
         )
     
     # Create access token for active accounts
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "tv": 0})
     
     return Token(
         access_token=access_token,
@@ -211,49 +291,14 @@ async def register(request: Request, user_data: UserCreate):
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit("5/minute")
+@limiter.limit("10/minute")
 async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     """
     Login with email and password.
     
     Returns a JWT access token for authenticated requests.
     """
-    # Find user by email
-    user = await User.find_one(User.email == form_data.username)
-    
-    if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Check account status
-    if user.account_status == AccountStatus.PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is pending admin approval. You'll receive an email once approved."
-        )
-    
-    if user.account_status == AccountStatus.REJECTED:
-        reason = user.rejection_reason or "No reason provided"
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Your account was rejected: {reason}"
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled"
-        )
-    
-    # Update last login
-    user.last_login = datetime.now(timezone.utc)
-    await user.save()
-    
-    # Create access token
-    access_token = create_access_token(data={"sub": str(user.id)})
+    user, access_token = await _authenticate_user(form_data.username, form_data.password, request)
     
     return Token(
         access_token=access_token,
@@ -273,7 +318,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 
 
 @router.post("/login/json", response_model=Token)
-@limiter.limit("5/minute")
+@limiter.limit("10/minute")
 async def login_json(request: Request, login_data: UserLogin):
     """
     Login with JSON body (alternative to form data).
@@ -281,40 +326,7 @@ async def login_json(request: Request, login_data: UserLogin):
     - **email**: User's email address
     - **password**: User's password
     """
-    user = await User.find_one(User.email == login_data.email)
-    
-    if not user or not verify_password(login_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-    
-    # Check account status
-    if user.account_status == AccountStatus.PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is pending admin approval. You'll receive an email once approved."
-        )
-    
-    if user.account_status == AccountStatus.REJECTED:
-        reason = user.rejection_reason or "No reason provided"
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Your account was rejected: {reason}"
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled"
-        )
-    
-    # Update last login
-    user.last_login = datetime.now(timezone.utc)
-    await user.save()
-    
-    # Create access token
-    access_token = create_access_token(data={"sub": str(user.id)})
+    user, access_token = await _authenticate_user(login_data.email, login_data.password, request)
     
     return Token(
         access_token=access_token,
@@ -395,7 +407,7 @@ async def update_current_user(
 class ChangePasswordRequest(BaseModel):
     """Schema for password change requests."""
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=12)
 
     @field_validator('new_password')
     @classmethod
@@ -426,12 +438,15 @@ async def change_password(
             detail="Current password is incorrect"
         )
     
-    # Update password
+    # Update password and invalidate all existing tokens
     current_user.password_hash = get_password_hash(data.new_password)
+    current_user.token_version = getattr(current_user, 'token_version', 0) + 1
     current_user.updated_at = datetime.now(timezone.utc)
     await current_user.save()
     
-    return {"message": "Password changed successfully"}
+    logger.info("auth.password_changed user_id=%s", str(current_user.id))
+    
+    return {"message": "Password changed successfully. Please log in again."}
 
 
 @router.delete("/account")

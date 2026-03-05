@@ -21,8 +21,8 @@ router = APIRouter()
 
 @router.get("/users", response_model=List[UserListResponse])
 async def get_all_users(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
     role: Optional[str] = None,
     account_status: Optional[str] = None,
     search: Optional[str] = None,

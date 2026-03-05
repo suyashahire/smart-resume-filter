@@ -7,14 +7,15 @@ import ChatBot from '@/components/features/ChatBot';
 
 export default function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  
-  // Hide HR navbar and footer on login page, candidate portal, and admin panel
+
+  // Hide HR navbar and footer on landing page, login page, candidate portal, and admin panel
   // These have their own layouts
+  const isLandingPage = pathname === '/';
   const isLoginPage = pathname === '/login';
   const isCandidatePortal = pathname?.startsWith('/candidate');
   const isAdminPanel = pathname?.startsWith('/admin');
-  
-  const showHRLayout = !isLoginPage && !isCandidatePortal && !isAdminPanel;
+
+  const showHRLayout = !isLandingPage && !isLoginPage && !isCandidatePortal && !isAdminPanel;
 
   return (
     <div className="flex flex-col min-h-screen">

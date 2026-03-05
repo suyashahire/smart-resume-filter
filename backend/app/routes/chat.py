@@ -2,7 +2,7 @@
 Chat API routes for the AI chatbot.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, Request, status, Query
 from typing import List, Optional
 from datetime import datetime, timezone
 
@@ -14,6 +14,7 @@ from app.services.chatbot import get_chatbot_service
 from app.services.rag import get_rag_service
 from app.routes.auth import get_current_user
 from app.models.user import User
+from app.limiter import limiter
 
 router = APIRouter()
 
@@ -101,7 +102,8 @@ async def send_message(
 
 
 @router.post("/message/anonymous", response_model=ChatResponse)
-async def send_message_anonymous(request: ChatRequest):
+@limiter.limit("10/minute")
+async def send_message_anonymous(request: Request, body: ChatRequest):
     """
     Send a message without authentication.
     Uses a temp conversation per session (no persistence).
@@ -113,10 +115,10 @@ async def send_message_anonymous(request: ChatRequest):
     # Generate response without conversation history for anonymous users
     # Use context field for role-appropriate responses
     result = await chatbot.generate_response(
-        user_message=request.message,
+        user_message=body.message,
         conversation_history=[],
         user=None,
-        context=request.context,  # 'candidate' or 'hr'
+        context=body.context,  # 'candidate' or 'hr'
     )
     
     return ChatResponse(
@@ -130,8 +132,8 @@ async def send_message_anonymous(request: ChatRequest):
 @router.get("/conversations", response_model=List[ConversationSummary])
 async def list_conversations(
     current_user: User = Depends(get_current_user),
-    limit: int = 20,
-    skip: int = 0
+    limit: int = Query(default=20, ge=1, le=100),
+    skip: int = Query(default=0, ge=0)
 ):
     """List user's conversations."""
     conversations = await Conversation.find(

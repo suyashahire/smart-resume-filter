@@ -2,7 +2,7 @@
 Resume routes for uploading, parsing, and managing resumes.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query, Request
 from fastapi.responses import FileResponse
 from typing import List
 from datetime import datetime, timezone
@@ -11,6 +11,7 @@ import re
 import aiofiles
 
 from app.config import settings
+from app.utils import validate_file_magic
 from app.models.user import User
 from app.models.resume import Resume, ResumeUploadResponse, ResumeListResponse, ParsedResumeData
 from app.models.screening import ScreeningResult
@@ -23,6 +24,9 @@ router = APIRouter()
 # Use singleton instance for model reuse (pre-loaded at startup)
 resume_parser = get_resume_parser()
 
+# Rate limiter
+from app.limiter import limiter
+
 
 def validate_file_extension(filename: str) -> bool:
     """Validate if file has allowed extension."""
@@ -31,7 +35,9 @@ def validate_file_extension(filename: str) -> bool:
 
 
 @router.post("/upload", response_model=ResumeUploadResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def upload_resume(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
@@ -57,6 +63,14 @@ async def upload_resume(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE_MB}MB"
+        )
+    
+    # Validate file content matches extension (magic bytes)
+    ext = os.path.splitext(file.filename)[1].lower()
+    if not validate_file_magic(file_content, ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match the expected format"
         )
     
     # Generate unique filename (sanitized against path traversal)
@@ -118,7 +132,9 @@ async def upload_resume(
 
 
 @router.post("/upload/batch", response_model=List[ResumeUploadResponse])
+@limiter.limit("5/minute")
 async def upload_multiple_resumes(
+    request: Request,
     files: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user)
 ):
@@ -149,9 +165,16 @@ async def upload_multiple_resumes(
             if file_size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
                 continue
             
-            # Generate unique filename
+            # Validate file content matches extension (magic bytes)
+            ext = os.path.splitext(file.filename)[1].lower()
+            if not validate_file_magic(file_content, ext):
+                continue
+            
+            # Generate unique filename (sanitized against path traversal)
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-            safe_filename = f"{timestamp}_{file.filename.replace(' ', '_')}"
+            base_name = os.path.basename(file.filename)
+            sanitized_name = re.sub(r'[^\w.\-]', '_', base_name)
+            safe_filename = f"{timestamp}_{sanitized_name}"
             file_path = os.path.join(settings.UPLOAD_DIR, "resumes", safe_filename)
             
             # Save file locally
@@ -214,8 +237,8 @@ async def upload_multiple_resumes(
 
 @router.get("/", response_model=List[ResumeListResponse])
 async def list_resumes(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
     current_user: User = Depends(get_current_user)
 ):
     """

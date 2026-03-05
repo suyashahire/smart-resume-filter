@@ -103,6 +103,10 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI application
+_docs_kwargs = {}
+if settings.ENVIRONMENT == "production":
+    _docs_kwargs = {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
 app = FastAPI(
     title="HireQ API",
     description="""
@@ -116,7 +120,8 @@ app = FastAPI(
     - 📋 Comprehensive Candidate Reports
     """,
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    **_docs_kwargs
 )
 
 # Configure CORS - Build allowed origins list
@@ -254,8 +259,6 @@ async def health_check():
     return {
         "status": overall,
         "database": db_status,
-        "ml_models": ml_status,
-        "rag_service": rag_status
     }
 
 

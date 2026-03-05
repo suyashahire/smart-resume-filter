@@ -126,7 +126,7 @@ export default function Navbar() {
       dismissNotification(notificationId);
       // Delete notification from DB using the actual DB ID
       const idToDelete = dbId || notificationId;
-      try { await api.deleteNotification(idToDelete); } catch {}
+      try { await api.deleteNotification(idToDelete); } catch { }
       // Trigger results page refresh
       bumpResultsVersion();
       console.log('Application approved:', result);
@@ -146,7 +146,7 @@ export default function Navbar() {
       dismissNotification(notificationId);
       // Delete notification from DB using the actual DB ID
       const idToDelete = dbId || notificationId;
-      try { await api.deleteNotification(idToDelete); } catch {}
+      try { await api.deleteNotification(idToDelete); } catch { }
       // Trigger results page refresh
       bumpResultsVersion();
       console.log('Application rejected:', result);
@@ -211,7 +211,7 @@ export default function Navbar() {
 
   // Base nav items for all users
   const baseNavItems = [
-    { name: 'Home', path: '/' },
+    { name: 'Home', path: '/home' },
     { name: 'Upload', path: '/upload-resume' },
     { name: 'Jobs', path: '/jobs' },
     { name: 'Results', path: '/results' },
@@ -248,17 +248,17 @@ export default function Navbar() {
   return (
     <>
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-          ? 'py-2'
-          : 'py-4'
+        ? 'py-2'
+        : 'py-4'
         }`}>
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-300 ${scrolled ? '' : ''
           }`}>
           <div className={`flex items-center justify-between px-3 lg:px-4 py-3 rounded-2xl transition-all duration-300 ${scrolled
-              ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg shadow-gray-200/20 dark:shadow-black/20 border border-gray-200/50 dark:border-gray-700/50'
-              : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-md border border-gray-200/30 dark:border-gray-700/30'
+            ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg shadow-gray-200/20 dark:shadow-black/20 border border-gray-200/50 dark:border-gray-700/50'
+            : 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-md border border-gray-200/30 dark:border-gray-700/30'
             }`}>
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-3 group">
+            <Link href="/home" className="flex items-center gap-3 group">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-purple-500 rounded-xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity"></div>
                 <div className="relative w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -280,8 +280,8 @@ export default function Navbar() {
                     key={item.path}
                     href={item.path}
                     className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${pathname === item.path
-                        ? 'text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      ? 'text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                       }`}
                   >
                     {pathname === item.path && (
@@ -305,17 +305,15 @@ export default function Navbar() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => router.push('/messages')}
-                  className={`relative p-2 rounded-lg transition-colors ${
-                    pathname === '/messages'
+                  className={`relative p-2 rounded-lg transition-colors ${pathname === '/messages'
                       ? 'bg-primary-500/10 dark:bg-primary-500/20'
                       : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
+                    }`}
                 >
-                  <MessageSquare className={`h-5 w-5 ${
-                    pathname === '/messages'
+                  <MessageSquare className={`h-5 w-5 ${pathname === '/messages'
                       ? 'text-primary-500'
                       : 'text-gray-600 dark:text-gray-400'
-                  }`} />
+                    }`} />
                 </motion.button>
               )}
 
@@ -407,11 +405,11 @@ export default function Navbar() {
                           ) : (
                             <div className="divide-y divide-gray-100 dark:divide-gray-800">
                               {notifications.map((notification) => {
-                                const requiresApproval = notification.type === 'new_application' && 
+                                const requiresApproval = notification.type === 'new_application' &&
                                   notification.data?.requires_approval === true;
                                 const applicationId = notification.data?.application_id as string | undefined;
                                 const isProcessing = processingApproval === applicationId;
-                                
+
                                 return (
                                   <motion.div
                                     key={notification.id}
@@ -430,7 +428,7 @@ export default function Navbar() {
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                           {formatTimestamp(notification.timestamp)}
                                         </p>
-                                        
+
                                         {/* Approval Buttons */}
                                         {requiresApproval && applicationId && (
                                           <div className="flex items-center gap-2 mt-2">
@@ -640,8 +638,8 @@ export default function Navbar() {
                       href={item.path}
                       onClick={() => setIsMenuOpen(false)}
                       className={`block px-4 py-3 rounded-xl text-base font-medium transition-all ${pathname === item.path
-                          ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                     >
                       {item.name}
@@ -656,11 +654,10 @@ export default function Navbar() {
                     <Link
                       href="/messages"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors mb-1 ${
-                        pathname === '/messages'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors mb-1 ${pathname === '/messages'
                           ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
                           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
+                        }`}
                     >
                       <MessageSquare className="h-5 w-5" />
                       <span className="font-medium">Messages</span>

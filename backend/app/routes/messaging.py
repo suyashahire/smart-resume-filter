@@ -2,9 +2,10 @@
 Messaging routes for HR-Candidate chat functionality.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from datetime import datetime, timezone
 from typing import Optional, List
+import re as re_module
 
 from app.models.user import User, UserRole
 from app.models.job import JobDescription
@@ -129,8 +130,8 @@ async def get_conversations(
 @router.get("/conversations/{conversation_id}", response_model=MessagesListResponse)
 async def get_conversation_messages(
     conversation_id: str,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -225,12 +226,13 @@ async def send_message(
         )
         await conversation.insert()
     
-    # Create message
+    # Create message (strip HTML tags to prevent stored XSS)
+    sanitized_content = re_module.sub(r'<[^>]+>', '', message_data.content)
     message = DirectMessage(
         conversation_id=str(conversation.id),
         sender_id=sender_id,
         receiver_id=receiver_id,
-        content=message_data.content,
+        content=sanitized_content,
     )
     
     await message.insert()

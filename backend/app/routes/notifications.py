@@ -2,7 +2,7 @@
 Notification routes for the HR dashboard.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional
 from bson import ObjectId
 from app.models.notification import (
@@ -37,7 +37,7 @@ def _to_response(n: Notification) -> NotificationResponse:
 @router.get("/", response_model=NotificationListResponse)
 async def get_notifications(
     unread_only: bool = False,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
 ):
     """Get notifications for the current user."""

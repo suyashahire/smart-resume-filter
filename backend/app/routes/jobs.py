@@ -2,7 +2,7 @@
 Job Description routes for creating and managing job postings.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List
 from datetime import datetime, timezone
 import logging
@@ -109,8 +109,8 @@ async def create_job_description(
 
 @router.get("/", response_model=List[JobDescriptionResponse])
 async def list_job_descriptions(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
     active_only: bool = True,
     current_user: User = Depends(get_current_user)
 ):

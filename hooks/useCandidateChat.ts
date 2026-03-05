@@ -141,8 +141,13 @@ export function useCandidateChat() {
       
       console.warn('Real backend failed, falling back to mock:', err instanceof Error ? err.message : err);
       setBackendAvailable(false);
-      // Fall back to mock response instead of showing error
-      await sendMockMessage(content, loadingId);
+      // Fall back to mock response in development only; show error in production
+      if (process.env.NODE_ENV === 'production') {
+        setError('AI assistant is temporarily unavailable. Please try again later.');
+        setMessages(prev => prev.filter(msg => !msg.isLoading));
+      } else {
+        await sendMockMessage(content, loadingId);
+      }
     } finally {
       setIsLoading(false);
     }
