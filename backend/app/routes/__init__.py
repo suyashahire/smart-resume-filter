@@ -1,5 +1,5 @@
 # API Routes
-from app.routes import auth, resumes, jobs, interviews, reports, chat, realtime, candidate, admin, messaging, insights
+from app.routes import auth, resumes, jobs, interviews, reports, chat, realtime, candidate, admin, messaging, insights, notifications
 
 __all__ = [
     "auth",
@@ -13,5 +13,6 @@ __all__ = [
     "admin",
     "messaging",
     "insights",
+    "notifications",
 ]
 
