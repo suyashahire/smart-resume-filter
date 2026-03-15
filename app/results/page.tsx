@@ -293,11 +293,23 @@ function ResultsContent() {
       });
       
       // Merge in uploaded resumes that haven't been screened yet
+      // Track both IDs and emails of already-screened candidates to avoid duplicates
       const screenedResumeIds = new Set(allScreenedResumes.map(r => r.id));
+      const screenedEmails = new Set(
+        allScreenedResumes.map(r => r.email?.toLowerCase()).filter(Boolean)
+      );
       if (uploadedResumes && uploadedResumes.length > 0) {
+        const seenUnscreenedEmails = new Set<string>();
         for (const resume of uploadedResumes) {
           if (!screenedResumeIds.has(resume.id) && resume.is_parsed && resume.parsed_data) {
             const pd = resume.parsed_data;
+            const email = (pd.email || '').toLowerCase();
+            // Skip if this person already appears in screened results (by email)
+            // or if we've already added an unscreened entry for this email
+            if ((email && screenedEmails.has(email)) || (email && seenUnscreenedEmails.has(email))) {
+              continue;
+            }
+            if (email) seenUnscreenedEmails.add(email);
             uniqueResumes.set(`${resume.id}-unscreened`, {
               id: resume.id,
               name: pd.name || resume.file_name || 'Unknown',

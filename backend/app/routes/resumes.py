@@ -84,29 +84,55 @@ async def upload_resume(
     async with aiofiles.open(file_path, "wb") as f:
         await f.write(file_content)
     
-    # Create resume document
-    resume = Resume(
-        user_id=str(current_user.id),
-        file_name=file.filename,
-        file_path=file_path,
-        file_size=file_size,
-        file_type=file.content_type or "application/octet-stream"
-    )
-    
+    # Parse resume first so we can check for duplicates by email
+    parsed_data = ParsedResumeData()
+    raw_text = None
+    is_parsed = False
+    parse_error = None
+
     try:
-        # Parse resume
         parsed_data, raw_text = await resume_parser.parse_resume(file_path)
-        
-        resume.parsed_data = parsed_data
-        resume.raw_text = raw_text
-        resume.is_parsed = True
-        
+        is_parsed = True
     except Exception as e:
-        resume.is_parsed = False
-        resume.parse_error = str(e)
-    
-    await resume.insert()
-    
+        parse_error = str(e)
+
+    # Check for existing resume with the same parsed email for this user
+    # to avoid duplicate candidate entries after job deletion + re-upload
+    existing_resume = None
+    if is_parsed and parsed_data.email:
+        existing_resume = await Resume.find_one(
+            Resume.user_id == str(current_user.id),
+            Resume.parsed_data.email == parsed_data.email,
+            Resume.is_primary == False,  # don't clobber candidate-portal primary resumes
+        )
+
+    if existing_resume:
+        # Update existing resume instead of creating a duplicate
+        existing_resume.file_name = file.filename
+        existing_resume.file_path = file_path
+        existing_resume.file_size = file_size
+        existing_resume.file_type = file.content_type or "application/octet-stream"
+        existing_resume.parsed_data = parsed_data
+        existing_resume.raw_text = raw_text
+        existing_resume.is_parsed = is_parsed
+        existing_resume.parse_error = parse_error
+        existing_resume.updated_at = datetime.now(timezone.utc)
+        await existing_resume.save()
+        resume = existing_resume
+    else:
+        resume = Resume(
+            user_id=str(current_user.id),
+            file_name=file.filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file.content_type or "application/octet-stream",
+            parsed_data=parsed_data,
+            raw_text=raw_text,
+            is_parsed=is_parsed,
+            parse_error=parse_error,
+        )
+        await resume.insert()
+
     # Broadcast real-time update
     ws_manager = get_connection_manager()
     await ws_manager.broadcast_event(
@@ -181,29 +207,53 @@ async def upload_multiple_resumes(
             async with aiofiles.open(file_path, "wb") as f:
                 await f.write(file_content)
             
-            # Create resume document
-            resume = Resume(
-                user_id=str(current_user.id),
-                file_name=file.filename,
-                file_path=file_path,
-                file_size=file_size,
-                file_type=file.content_type or "application/octet-stream"
-            )
-            
+            # Parse resume first for duplicate detection
+            parsed_data = ParsedResumeData()
+            raw_text = None
+            is_parsed = False
+            parse_error = None
+
             try:
-                # Parse resume
                 parsed_data, raw_text = await resume_parser.parse_resume(file_path)
-                
-                resume.parsed_data = parsed_data
-                resume.raw_text = raw_text
-                resume.is_parsed = True
-                
+                is_parsed = True
             except Exception as e:
-                resume.is_parsed = False
-                resume.parse_error = str(e)
-            
-            await resume.insert()
-            
+                parse_error = str(e)
+
+            # Check for existing resume with same parsed email (avoid duplicates)
+            existing_resume = None
+            if is_parsed and parsed_data.email:
+                existing_resume = await Resume.find_one(
+                    Resume.user_id == str(current_user.id),
+                    Resume.parsed_data.email == parsed_data.email,
+                    Resume.is_primary == False,
+                )
+
+            if existing_resume:
+                existing_resume.file_name = file.filename
+                existing_resume.file_path = file_path
+                existing_resume.file_size = file_size
+                existing_resume.file_type = file.content_type or "application/octet-stream"
+                existing_resume.parsed_data = parsed_data
+                existing_resume.raw_text = raw_text
+                existing_resume.is_parsed = is_parsed
+                existing_resume.parse_error = parse_error
+                existing_resume.updated_at = datetime.now(timezone.utc)
+                await existing_resume.save()
+                resume = existing_resume
+            else:
+                resume = Resume(
+                    user_id=str(current_user.id),
+                    file_name=file.filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file.content_type or "application/octet-stream",
+                    parsed_data=parsed_data,
+                    raw_text=raw_text,
+                    is_parsed=is_parsed,
+                    parse_error=parse_error,
+                )
+                await resume.insert()
+
             # Broadcast real-time update for each resume
             ws_manager = get_connection_manager()
             await ws_manager.broadcast_event(

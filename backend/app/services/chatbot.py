@@ -191,18 +191,19 @@ class ChatbotService:
         """
         Get user-specific context based on their role.
         For candidates: their applications, resumes, profile
-        For HR: their jobs, applicants, interviews
+        For HR: their jobs, candidates, screening results, interviews
         """
         if not user:
             return ""
         
         try:
-            from app.models.user import UserRole
+            from app.models.user import User as UserModel, UserRole
             from app.models.application import Application
             from app.models.resume import Resume
             from app.models.job import JobDescription
+            from app.models.screening import ScreeningResult
             from app.models.interview import Interview
-            from app.models.message import Message
+            from app.models.message import DirectMessage
             
             context_parts = []
             user_id = str(user.id)
@@ -212,6 +213,10 @@ class ChatbotService:
                 context_parts.append(f"\n### Your Profile:\n")
                 context_parts.append(f"- **Name**: {user.name}")
                 context_parts.append(f"- **Email**: {user.email}")
+                if user.title:
+                    context_parts.append(f"- **Title**: {user.title}")
+                if user.skills:
+                    context_parts.append(f"- **Skills**: {', '.join(user.skills[:15])}")
                 
                 # Get candidate's applications
                 applications = await Application.find(
@@ -220,15 +225,14 @@ class ChatbotService:
                 
                 if applications:
                     context_parts.append(f"\n### Your Applications ({len(applications)}):\n")
-                    for app in applications:
-                        # Get job details
-                        job = await JobDescription.get(app.job_id)
+                    for application in applications:
+                        job = await JobDescription.get(application.job_id)
                         job_title = job.title if job else "Unknown Position"
-                        company = job.company if job else "Unknown Company"
+                        company = getattr(job, 'company', None) or "Unknown Company" if job else "Unknown Company"
                         context_parts.append(
                             f"- **{job_title}** at {company}\n"
-                            f"  - Status: **{app.status.value.upper()}**\n"
-                            f"  - Applied: {app.applied_at.strftime('%b %d, %Y')}"
+                            f"  - Status: **{application.status.value.replace('_', ' ').upper()}**\n"
+                            f"  - Applied: {application.applied_at.strftime('%b %d, %Y')}"
                         )
                 else:
                     context_parts.append("\n### Your Applications:\n")
@@ -246,24 +250,29 @@ class ChatbotService:
                         label = getattr(resume, 'version_label', '') or resume.file_name
                         context_parts.append(f"- **{label}**{primary}")
                         
-                        # Include parsed skills if available
                         if resume.parsed_data:
-                            skills = resume.parsed_data.get('skills', [])[:10]
+                            pd = resume.parsed_data
+                            skills = getattr(pd, 'skills', []) or []
                             if skills:
-                                context_parts.append(f"  - Skills: {', '.join(skills)}")
-                            exp = resume.parsed_data.get('experience', [])
-                            if exp and len(exp) > 0:
-                                latest_exp = exp[0] if isinstance(exp[0], str) else str(exp[0])[:100]
-                                context_parts.append(f"  - Latest Experience: {latest_exp}")
+                                context_parts.append(f"  - Skills: {', '.join(skills[:10])}")
+                            experience = getattr(pd, 'experience', '') or ''
+                            if experience:
+                                context_parts.append(f"  - Experience: {str(experience)[:150]}")
+                            education = getattr(pd, 'education', '') or ''
+                            if education:
+                                context_parts.append(f"  - Education: {str(education)[:150]}")
                 
                 # Get unread messages count
-                unread = await Message.find(
-                    Message.receiver_id == user_id,
-                    Message.is_read == False
-                ).count()
-                if unread > 0:
-                    context_parts.append(f"\n### Notifications:\n")
-                    context_parts.append(f"- You have **{unread}** unread message(s)")
+                try:
+                    unread = await DirectMessage.find(
+                        DirectMessage.receiver_id == user_id,
+                        DirectMessage.read_at == None
+                    ).count()
+                    if unread > 0:
+                        context_parts.append(f"\n### Notifications:\n")
+                        context_parts.append(f"- You have **{unread}** unread message(s)")
+                except Exception:
+                    pass
             
             else:
                 # === HR/ADMIN CONTEXT ===
@@ -273,27 +282,51 @@ class ChatbotService:
                 if user.company:
                     context_parts.append(f"- **Company**: {user.company}")
                 
-                # Get HR user's jobs
+                # Get HR user's jobs (user_id is the correct field)
                 jobs = await JobDescription.find(
-                    JobDescription.created_by == user_id
+                    JobDescription.user_id == user_id
                 ).sort(-JobDescription.created_at).limit(10).to_list()
                 
                 if jobs:
                     context_parts.append(f"\n### Your Job Postings ({len(jobs)}):\n")
                     for job in jobs:
-                        # Count applications for this job
                         app_count = await Application.find(
                             Application.job_id == str(job.id)
                         ).count()
-                        status = getattr(job, 'status', 'active')
+                        screened = await ScreeningResult.find(
+                            ScreeningResult.job_id == str(job.id)
+                        ).count()
+                        status = getattr(job, 'status', 'open')
                         context_parts.append(
                             f"- **{job.title}** ({status})\n"
-                            f"  - Applicants: {app_count}\n"
+                            f"  - Applicants: {app_count}, Screened: {screened}\n"
+                            f"  - Required Skills: {', '.join(job.required_skills[:8]) if job.required_skills else 'None specified'}\n"
                             f"  - Posted: {job.created_at.strftime('%b %d, %Y')}"
                         )
                 else:
                     context_parts.append("\n### Your Job Postings:\n")
                     context_parts.append("- No jobs posted yet.")
+                
+                # Get HR user's uploaded resumes (candidates)
+                hr_resumes = await Resume.find(
+                    Resume.user_id == user_id
+                ).sort(-Resume.created_at).limit(20).to_list()
+                
+                if hr_resumes:
+                    parsed_resumes = [r for r in hr_resumes if r.is_parsed and r.parsed_data]
+                    context_parts.append(f"\n### Uploaded Candidates ({len(hr_resumes)} total, {len(parsed_resumes)} parsed):\n")
+                    for resume in parsed_resumes[:10]:
+                        pd = resume.parsed_data
+                        name = getattr(pd, 'name', '') or resume.file_name
+                        email = getattr(pd, 'email', '') or ''
+                        skills = getattr(pd, 'skills', []) or []
+                        skills_str = ', '.join(skills[:6]) if skills else 'None extracted'
+                        context_parts.append(
+                            f"- **{name}** ({email})\n"
+                            f"  - Skills: {skills_str}"
+                        )
+                    if len(parsed_resumes) > 10:
+                        context_parts.append(f"  - ... and {len(parsed_resumes) - 10} more candidates")
                 
                 # Get recent applications to HR's jobs
                 if jobs:
@@ -304,20 +337,39 @@ class ChatbotService:
                     
                     if recent_apps:
                         context_parts.append(f"\n### Recent Applications ({len(recent_apps)}):\n")
-                        for app in recent_apps:
-                            # Get candidate name
-                            from app.models.user import User
-                            candidate = await User.get(app.candidate_id)
+                        for application in recent_apps:
+                            candidate = await UserModel.get(application.candidate_id)
                             candidate_name = candidate.name if candidate else "Unknown"
-                            job = next((j for j in jobs if str(j.id) == app.job_id), None)
-                            job_title = job.title if job else "Unknown Position"
+                            matched_job = next((j for j in jobs if str(j.id) == application.job_id), None)
+                            job_title = matched_job.title if matched_job else "Unknown Position"
                             context_parts.append(
                                 f"- **{candidate_name}** applied for {job_title}\n"
-                                f"  - Status: {app.status.value}\n"
-                                f"  - Applied: {app.applied_at.strftime('%b %d, %Y')}"
+                                f"  - Status: {application.status.value.replace('_', ' ')}\n"
+                                f"  - Applied: {application.applied_at.strftime('%b %d, %Y')}"
                             )
                 
-                # Get interviews (uploaded by this HR user)
+                # Get top screening results across all jobs
+                if jobs:
+                    job_ids = [str(job.id) for job in jobs]
+                    top_results = await ScreeningResult.find(
+                        {"job_id": {"$in": job_ids}}
+                    ).sort(-ScreeningResult.overall_score).limit(5).to_list()
+                    
+                    if top_results:
+                        context_parts.append(f"\n### Top Screened Candidates:\n")
+                        for result in top_results:
+                            resume = await Resume.get(result.resume_id)
+                            name = "Unknown"
+                            if resume and resume.parsed_data:
+                                name = getattr(resume.parsed_data, 'name', '') or resume.file_name
+                            matched_job = next((j for j in jobs if str(j.id) == result.job_id), None)
+                            job_title = matched_job.title if matched_job else "Unknown"
+                            context_parts.append(
+                                f"- **{name}** — Score: {result.overall_score:.0f}% for {job_title}\n"
+                                f"  - Recommendation: {result.recommendation.replace('_', ' ')}"
+                            )
+                
+                # Get interviews
                 interviews = await Interview.find(
                     Interview.user_id == user_id
                 ).sort(-Interview.created_at).limit(5).to_list()
@@ -335,6 +387,8 @@ class ChatbotService:
             
         except Exception as e:
             print(f"⚠️ Error fetching user context: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
     
     def _get_system_prompt(self, user: Optional[Any] = None, context: str = None) -> str:

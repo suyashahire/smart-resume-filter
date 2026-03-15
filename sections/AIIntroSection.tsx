@@ -57,36 +57,22 @@ export default function AIIntroSection() {
                 </motion.h2>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-                    {/* Left — Gradient Glass Card Illustration */}
+                    {/* Left — Video Card */}
                     <motion.div
                         initial={{ opacity: 0, x: -30 }}
                         animate={isInView ? { opacity: 1, x: 0 } : {}}
                         transition={{ duration: 0.7, delay: 0.2 }}
                         className="relative aspect-[4/3] rounded-[32px] overflow-hidden"
                     >
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-purple-100/60 to-blue-50" />
-                        {/* Decorative abstract shapes */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="relative">
-                                <motion.div
-                                    animate={{ rotate: [0, 360] }}
-                                    transition={{ duration: 60, repeat: Infinity, ease: 'linear' }}
-                                    className="w-48 h-48 md:w-64 md:h-64 border border-white/40 rounded-3xl"
-                                    style={{ transform: 'rotate(45deg)' }}
-                                />
-                                <motion.div
-                                    animate={{ rotate: [0, -360] }}
-                                    transition={{ duration: 80, repeat: Infinity, ease: 'linear' }}
-                                    className="absolute inset-0 w-48 h-48 md:w-64 md:h-64 border border-white/30 rounded-3xl"
-                                    style={{ transform: 'rotate(22.5deg)' }}
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <Brain className="h-12 w-12 md:h-16 md:w-16 text-white/70" />
-                                </div>
-                            </div>
-                        </div>
-                        {/* Gradient overlay at bottom */}
-                        <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-blue-200/40 to-transparent" />
+                        <video
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="absolute inset-0 w-full h-full object-cover"
+                        >
+                            <source src="/main_page_brain_card.mp4" type="video/mp4" />
+                        </video>
                     </motion.div>
 
                     {/* Right — Features list */}

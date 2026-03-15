@@ -179,15 +179,11 @@ export default function UploadResumePage() {
         setProcessingStatus('Processing complete!');
       }
 
-      // Store processed resume IDs and show the job assignment modal
+      // Store processed resume IDs and show the job assignment modal immediately
       setProcessedResumeIds(newResumeIds);
-      
-      // Small delay before showing modal
-      setTimeout(() => {
-        setShowJobAssignmentModal(true);
-        setIsProcessing(false);
-        setIsLoading(false);
-      }, 800);
+      setIsProcessing(false);
+      setIsLoading(false);
+      setShowJobAssignmentModal(true);
       
     } catch (err) {
       console.error('Error processing resumes:', err);
