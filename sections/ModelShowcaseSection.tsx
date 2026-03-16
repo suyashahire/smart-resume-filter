@@ -67,7 +67,7 @@ export default function ModelShowcaseSection() {
                         initial={{ opacity: 0, y: 30 }}
                         animate={isInView ? { opacity: 1, y: 0 } : {}}
                         transition={{ duration: 0.6 }}
-                        className="text-[36px] md:text-[48px] font-bold text-center text-gray-900 tracking-tight mb-12 leading-tight"
+                        className="text-[34px] md:text-[46px] font-bold text-center text-gray-900 tracking-tight mb-12 leading-tight"
                     >
                         See it in action
                     </motion.h2>

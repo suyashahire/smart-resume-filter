@@ -51,7 +51,7 @@ export default function AIIntroSection() {
                     initial={{ opacity: 0, y: 30 }}
                     animate={isInView ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.6 }}
-                    className="text-[36px] md:text-[44px] font-bold text-center text-gray-900 tracking-tight mb-16 leading-tight"
+                    className="text-[34px] md:text-[44px] font-bold text-center text-gray-900 tracking-tight mb-14 leading-tight"
                 >
                     Powering the future of AI hiring
                 </motion.h2>

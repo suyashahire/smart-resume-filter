@@ -58,7 +58,7 @@ export default function InfrastructureSection() {
                         initial={{ opacity: 0, y: 15 }}
                         animate={isInView ? { opacity: 1, y: 0 } : {}}
                         transition={{ duration: 0.5, delay: 0.3 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-20"
+                        className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-14"
                     >
                         <Link
                             href="/login"
