@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Search, FileCheck, BarChart3, Brain, Shield, Zap } from 'lucide-react';
+import { Search, FileCheck, BarChart3 } from 'lucide-react';
 import SectionContainer from '@/components/landing/SectionContainer';
 
 const cards = [

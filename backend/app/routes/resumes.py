@@ -5,6 +5,9 @@ Resume routes for uploading, parsing, and managing resumes.
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, status, Query, Request
 from fastapi.responses import FileResponse
 from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
 import os
 import re
@@ -279,7 +282,7 @@ async def upload_multiple_resumes(
             ))
             
         except Exception as e:
-            print(f"Error processing file {file.filename}: {e}")
+            logger.warning("Error processing file %s: %s", file.filename, e)
             continue
     
     return results

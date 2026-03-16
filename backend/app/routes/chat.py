@@ -12,7 +12,7 @@ from app.models.conversation import (
 )
 from app.services.chatbot import get_chatbot_service
 from app.services.rag import get_rag_service
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, require_admin
 from app.models.user import User
 from app.limiter import limiter
 
@@ -203,7 +203,7 @@ async def delete_conversation(
 
 
 @router.post("/reindex")
-async def reindex_rag(current_user: User = Depends(get_current_user)):
+async def reindex_rag(current_user: User = Depends(require_admin)):
     """Reindex all documents for RAG search."""
     rag = get_rag_service()
     await rag._initialize()

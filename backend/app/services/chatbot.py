@@ -3,11 +3,14 @@ AI Chatbot service using Google Gemini (free tier) with RAG context.
 """
 
 import asyncio
+import logging
 import re
 import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from html import escape as html_escape
+
+logger = logging.getLogger(__name__)
 
 try:
     from google import genai
@@ -102,12 +105,12 @@ class ChatbotService:
             return
         
         if not HAS_GEMINI:
-            print("  ⚠️ google-genai not installed, chatbot will use fallback mode")
+            logger.warning("google-genai not installed, chatbot will use fallback mode")
             return
         
         api_key = getattr(settings, 'GEMINI_API_KEY', '') or ''
         if not api_key:
-            print("  ⚠️ GEMINI_API_KEY not set, chatbot will use fallback mode")
+            logger.warning("GEMINI_API_KEY not set, chatbot will use fallback mode")
             return
         
         try:
@@ -124,16 +127,16 @@ class ChatbotService:
                     )
                     if response.text:
                         self.model_name = model_name
-                        print(f"  ✅ Gemini chatbot initialized ({model_name})")
+                        logger.info("Gemini chatbot initialized (%s)", model_name)
                         return
                 except Exception as e:
-                    print(f"  ⚠️ Model {model_name} failed: {str(e)[:80]}")
+                    logger.warning("Model %s failed: %s", model_name, str(e)[:80])
                     continue
             
-            print("  ⚠️ All Gemini models failed, chatbot will use fallback mode")
+            logger.warning("All Gemini models failed, chatbot will use fallback mode")
             self.client = None
         except Exception as e:
-            print(f"  ⚠️ Failed to initialize Gemini: {e}")
+            logger.warning("Failed to initialize Gemini: %s", e)
             self.client = None
     
     def is_available(self) -> bool:
@@ -386,9 +389,7 @@ class ChatbotService:
             return "\n".join(context_parts)
             
         except Exception as e:
-            print(f"⚠️ Error fetching user context: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error fetching user context")
             return ""
     
     def _get_system_prompt(self, user: Optional[Any] = None, context: str = None) -> str:
@@ -542,7 +543,7 @@ class ChatbotService:
                 }
                 
             except Exception as e:
-                print(f"⚠️ Gemini error: {e}")
+                logger.warning("Gemini error: %s", e)
                 # Fall back to smart fallback
                 return await self._fallback_response(safe_message, rag_context, sources, user, context)
         else:

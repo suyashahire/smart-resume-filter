@@ -23,6 +23,8 @@ except ImportError:
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class RAGService:
     """
@@ -52,11 +54,11 @@ class RAGService:
             return
         
         if not HAS_SENTENCE_TRANSFORMERS:
-            print("  ⚠️ sentence-transformers not installed, RAG disabled")
+            logger.warning("sentence-transformers not installed, RAG disabled")
             return
         
         if not HAS_CHROMADB:
-            print("  ⚠️ chromadb not installed, RAG disabled")
+            logger.warning("chromadb not installed, RAG disabled")
             return
         
         # Load embedding model (reuse the one from config)
@@ -83,7 +85,7 @@ class RAGService:
             metadata={"hnsw:space": "cosine"}
         )
         
-        print("  ✅ RAG service initialized (ChromaDB + embeddings)")
+        logger.info("RAG service initialized (ChromaDB + embeddings)")
     
     def is_available(self) -> bool:
         """Check if RAG service is ready."""
@@ -204,7 +206,7 @@ class RAGService:
         try:
             self.resumes_collection.delete(ids=[resume_id])
         except Exception:
-            logging.getLogger(__name__).warning("Failed to remove resume %s from RAG index", resume_id)
+            logger.warning("Failed to remove resume %s from RAG index", resume_id)
     
     async def remove_job(self, job_id: str):
         """Remove a job from the index."""
@@ -213,7 +215,7 @@ class RAGService:
         try:
             self.jobs_collection.delete(ids=[job_id])
         except Exception:
-            logging.getLogger(__name__).warning("Failed to remove job %s from RAG index", job_id)
+            logger.warning("Failed to remove job %s from RAG index", job_id)
     
     async def search(self, query: str, n_results: int = 5, search_type: str = "all") -> List[Dict[str, Any]]:
         """
@@ -259,7 +261,7 @@ class RAGService:
                                 "id": resume_results["ids"][0][i] if resume_results["ids"] else ""
                             })
             except Exception as e:
-                print(f"⚠️ Resume search error: {e}")
+                logger.warning("Resume search error: %s", e)
         
         # Search jobs
         if search_type in ("all", "jobs"):
@@ -282,7 +284,7 @@ class RAGService:
                                 "id": job_results["ids"][0][i] if job_results["ids"] else ""
                             })
             except Exception as e:
-                print(f"⚠️ Job search error: {e}")
+                logger.warning("Job search error: %s", e)
         
         # Sort by relevance
         results.sort(key=lambda x: x["relevance"], reverse=True)
@@ -321,7 +323,7 @@ class RAGService:
                 await self.index_resume(str(resume.id), resume_data)
                 indexed_resumes += 1
             except Exception as e:
-                print(f"⚠️ Failed to index resume {resume.id}: {e}")
+                logger.warning("Failed to index resume %s: %s", resume.id, e)
         
         # Reindex all jobs
         async for job in JobDescription.find_all():
@@ -338,7 +340,7 @@ class RAGService:
                 await self.index_job(str(job.id), job_data)
                 indexed_jobs += 1
             except Exception as e:
-                print(f"⚠️ Failed to index job {job.id}: {e}")
+                logger.warning("Failed to index job %s: %s", job.id, e)
         
         return {
             "status": "success",

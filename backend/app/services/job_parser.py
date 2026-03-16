@@ -4,9 +4,6 @@ Job Parser Service - Extract skills and requirements from job descriptions.
 
 import re
 from typing import List
-import asyncio
-
-from app.config import settings
 
 
 class JobParserService:

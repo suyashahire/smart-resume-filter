@@ -380,7 +380,7 @@ export default function CandidateProfilePage() {
         skills: data.skills || []
       });
     } catch {
-      console.log('No profile found, using defaults');
+      // No profile found, using defaults
     } finally {
       setIsLoading(false);
     }

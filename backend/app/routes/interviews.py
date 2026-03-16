@@ -19,7 +19,7 @@ from app.models.interview import (
     InterviewListResponse, SentimentAnalysis
 )
 from app.models.screening import ScreeningResult
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, require_hr
 from app.services.transcription import get_transcription_service
 from app.services.sentiment import get_sentiment_service
 from app.services.websocket_manager import get_connection_manager, EventType
@@ -47,7 +47,7 @@ async def upload_interview(
     request: Request,
     resume_id: str,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Upload an interview recording for a candidate.
@@ -133,7 +133,7 @@ async def upload_interview(
 @router.post("/{interview_id}/transcribe", response_model=InterviewAnalysisResponse)
 async def transcribe_interview(
     interview_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Transcribe an interview recording using Speech-to-Text.
@@ -174,9 +174,10 @@ async def transcribe_interview(
         interview.transcription_error = str(e)
         await interview.save()
         
+        logger.exception("Transcription failed for interview %s", interview.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Transcription failed: {str(e)}"
+            detail="Transcription failed. Please try again later."
         )
     
     await interview.save()
@@ -196,7 +197,7 @@ async def transcribe_interview(
 @router.post("/{interview_id}/analyze", response_model=InterviewAnalysisResponse)
 async def analyze_interview(
     interview_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Analyze an interview transcript for sentiment and confidence.
@@ -262,9 +263,10 @@ async def analyze_interview(
         interview.analysis_error = str(e)
         await interview.save()
         
+        logger.exception("Analysis failed for interview %s", interview.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Analysis failed: {str(e)}"
+            detail="Analysis failed. Please try again later."
         )
     
     await interview.save()
@@ -298,7 +300,7 @@ async def analyze_interview(
 @router.post("/{interview_id}/process", response_model=InterviewAnalysisResponse)
 async def process_interview(
     interview_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Process an interview: transcribe and analyze in one step.
@@ -359,9 +361,10 @@ async def process_interview(
         interview.analysis_error = str(e)
         await interview.save()
         
+        logger.exception("Processing failed for interview %s", interview.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Processing failed: {str(e)}"
+            detail="Processing failed. Please try again later."
         )
     
     await interview.save()
@@ -386,7 +389,7 @@ async def list_interviews(
     min_score: Optional[float] = Query(None, description="Minimum sentiment score"),
     max_score: Optional[float] = Query(None, description="Maximum sentiment score"),
     analyzed_only: bool = Query(False, description="Only return analyzed interviews"),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """List all interviews uploaded by the current user with optional filters."""
     query = {"user_id": str(current_user.id)}
@@ -457,7 +460,7 @@ async def list_interviews(
 @router.get("/{interview_id}", response_model=InterviewAnalysisResponse)
 async def get_interview(
     interview_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Get a specific interview by ID."""
     interview = await Interview.get(interview_id)
@@ -489,7 +492,7 @@ async def get_interview(
 @router.get("/resume/{resume_id}", response_model=InterviewAnalysisResponse)
 async def get_interview_by_resume(
     resume_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Get interview for a specific resume/candidate."""
     interview = await Interview.find_one(
@@ -518,7 +521,7 @@ async def get_interview_by_resume(
 @router.delete("/{interview_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_interview(
     interview_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Delete an interview by ID."""
     interview = await Interview.get(interview_id)

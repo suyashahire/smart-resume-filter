@@ -3,12 +3,16 @@ WebSocket Connection Manager for real-time updates.
 Manages client connections and broadcasts events.
 """
 
-from fastapi import WebSocket
-from typing import Dict, List, Set, Any
+import logging
 import json
 import asyncio
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Dict, List, Set, Any
+
+from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 class EventType(str, Enum):
@@ -88,7 +92,7 @@ class ConnectionManager:
             }
         )
         
-        print(f"📡 WebSocket connected: user={user_id}, total={len(self.all_connections)}")
+        logger.info("WebSocket connected: user=%s, total=%d", user_id, len(self.all_connections))
     
     def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection."""
@@ -109,14 +113,14 @@ class ConnectionManager:
         if websocket in self.connection_info:
             del self.connection_info[websocket]
         
-        print(f"📡 WebSocket disconnected: user={user_id}, total={len(self.all_connections)}")
+        logger.info("WebSocket disconnected: user=%s, total=%d", user_id, len(self.all_connections))
     
     async def send_personal_message(self, websocket: WebSocket, message: dict):
         """Send a message to a specific WebSocket."""
         try:
             await websocket.send_json(message)
         except Exception as e:
-            print(f"Error sending personal message: {e}")
+            logger.error("Error sending personal message: %s", e)
             self.disconnect(websocket)
     
     async def send_to_user(self, user_id: str, message: dict):
@@ -129,7 +133,7 @@ class ConnectionManager:
             try:
                 await websocket.send_json(message)
             except Exception as e:
-                print(f"Error sending to user {user_id}: {e}")
+                logger.error("Error sending to user %s: %s", user_id, e)
                 disconnected.append(websocket)
         
         # Clean up disconnected sockets
@@ -144,7 +148,7 @@ class ConnectionManager:
             try:
                 await websocket.send_json(message)
             except Exception as e:
-                print(f"Error broadcasting: {e}")
+                logger.error("Error broadcasting: %s", e)
                 disconnected.append(websocket)
         
         # Clean up disconnected sockets

@@ -304,7 +304,7 @@ async def apply_to_job(
                 await job.save()
                 
         except Exception as e:
-            print(f"⚠️ Auto-screening failed for application {application.id}: {e}")
+            logger.warning("Auto-screening failed for application %s: %s", application.id, e)
 
     # ── Notify the HR user who created this job ──
     try:
@@ -352,7 +352,7 @@ async def apply_to_job(
         )
     except Exception as e:
         # Don't fail the application if notification fails
-        print(f"⚠️ Failed to send application notification: {e}")
+        logger.warning("Failed to send application notification: %s", e)
 
     return ApplicationResponse(
         id=str(application.id),

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, Send, Trash2, User, Sparkles, Brain,
+  X, User, Sparkles, Brain,
   ChevronDown, Loader2, AlertCircle, Minimize2, Maximize2,
   ArrowUp, Zap, RotateCcw,
 } from 'lucide-react';

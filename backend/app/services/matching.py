@@ -5,6 +5,7 @@ Uses Sentence-BERT for semantic similarity between candidate skills and job requ
 """
 
 import re
+import logging
 from typing import List, Dict, Any, Optional
 import asyncio
 
@@ -13,6 +14,7 @@ from app.models.job import JobDescription
 from app.models.screening import SkillMatch, ScoreBreakdown
 from app.config import settings
 
+logger = logging.getLogger(__name__)
 
 # Singleton instance for model caching
 _matching_service_instance: Optional["MatchingService"] = None
@@ -41,7 +43,7 @@ class MatchingService:
                     from sentence_transformers import SentenceTransformer
                     return SentenceTransformer(settings.SENTENCE_TRANSFORMER_MODEL)
                 except Exception as e:
-                    print(f"Warning: Could not load sentence transformer: {e}")
+                    logger.warning("Could not load sentence transformer: %s", e)
                     return None
             
             self.model = await asyncio.get_event_loop().run_in_executor(None, load_model)

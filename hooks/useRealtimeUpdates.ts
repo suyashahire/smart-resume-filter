@@ -144,7 +144,6 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('🟢 WebSocket connected');
         setIsConnected(true);
         connectionAttemptsRef.current = 0;
         setConnectionAttempts(0);
@@ -159,7 +158,6 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
       };
 
       ws.onclose = (event) => {
-        console.log('🔴 WebSocket disconnected', event.code, event.reason);
         setIsConnected(false);
         onConnectionChangeRef.current?.(false);
 
@@ -205,48 +203,39 @@ export function useRealtimeUpdates(options: UseRealtimeUpdatesOptions = {}) {
     switch (event.type) {
       case 'resume_uploaded':
         // Refresh resumes or add to local state
-        console.log('📄 New resume uploaded:', event.data);
         break;
 
       case 'candidate_scored':
         // Update candidate score in local state
-        console.log('🎯 Candidate scored:', event.data);
         break;
 
       case 'interview_analyzed':
         // Update interview analysis
-        console.log('🎤 Interview analyzed:', event.data);
         break;
 
       case 'job_created':
         // Add new job to local state
-        console.log('💼 Job created:', event.data);
         break;
 
       case 'job_deleted':
         // Remove job from local state
-        console.log('🗑️ Job deleted:', event.data);
         break;
 
       case 'new_application':
-        console.log('📩 New application:', event.data);
         break;
 
       case 'new_message':
-        console.log('💬 New message:', event.data);
         break;
 
       case 'pipeline_status_changed':
         // Update pipeline status
-        console.log('📊 Pipeline status changed:', event.data);
         break;
 
       case 'connection_established':
-        console.log('✅ Connection established:', event.data);
         break;
 
       default:
-        console.log('📬 Event received:', event);
+        break;
     }
   }, []);
 

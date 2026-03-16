@@ -5,12 +5,14 @@ Uses Hugging Face Transformers for sentiment analysis.
 """
 
 import re
+import logging
 from typing import List, Optional
 import asyncio
 
 from app.models.interview import SentimentAnalysis
 from app.config import settings
 
+logger = logging.getLogger(__name__)
 
 # Singleton instance for model caching
 _sentiment_service_instance: Optional["SentimentAnalysisService"] = None
@@ -69,7 +71,7 @@ class SentimentAnalysisService:
                         model=settings.SENTIMENT_MODEL
                     )
                 except Exception as e:
-                    print(f"Warning: Could not load sentiment model: {e}")
+                    logger.warning("Could not load sentiment model: %s", e)
                     return None
             
             self.sentiment_analyzer = await asyncio.get_event_loop().run_in_executor(

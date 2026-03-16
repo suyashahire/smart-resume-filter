@@ -4,6 +4,9 @@ Admin routes for user management and approval.
 
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import Optional, List
 import re as re_module
 
@@ -180,7 +183,7 @@ async def approve_user(
         email_service = get_email_service()
         await email_service.send_account_approved(user.email, user.name)
     except Exception as e:
-        print(f"⚠️ Failed to send approval email: {e}")
+        logger.warning("Failed to send approval email: %s", e)
     
     return {
         "message": "User approved successfully",
@@ -231,7 +234,7 @@ async def reject_user(
         email_service = get_email_service()
         await email_service.send_account_rejected(user.email, user.name, request.reason)
     except Exception as e:
-        print(f"⚠️ Failed to send rejection email: {e}")
+        logger.warning("Failed to send rejection email: %s", e)
     
     return {
         "message": "User rejected",

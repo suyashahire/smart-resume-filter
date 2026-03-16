@@ -5,7 +5,10 @@ Uses OpenAI's open-source Whisper model running locally on the server.
 """
 
 import os
+import logging
 import asyncio
+
+logger = logging.getLogger(__name__)
 from typing import Optional
 
 from app.config import settings
@@ -37,12 +40,12 @@ class TranscriptionService:
             def load_model():
                 try:
                     import whisper
-                    print(f"Loading Whisper model: {self._model_name}...")
+                    logger.info("Loading Whisper model: %s...", self._model_name)
                     model = whisper.load_model(self._model_name)
-                    print(f"Whisper model '{self._model_name}' loaded successfully")
+                    logger.info("Whisper model '%s' loaded successfully", self._model_name)
                     return model
                 except Exception as e:
-                    print(f"Warning: Could not load Whisper model: {e}")
+                    logger.warning("Could not load Whisper model: %s", e)
                     return None
             
             self.model = await asyncio.get_event_loop().run_in_executor(None, load_model)
@@ -67,7 +70,7 @@ class TranscriptionService:
             try:
                 return await self._transcribe_with_local_whisper(file_path)
             except Exception as e:
-                print(f"Local Whisper transcription failed: {e}")
+                logger.error("Local Whisper transcription failed: %s", e)
                 raise
         else:
             raise RuntimeError("Whisper model not loaded. Please ensure 'openai-whisper' is installed.")

@@ -56,12 +56,10 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup
     await connect_to_mongo()
-    print("🚀 HireQ API is starting up...")
-    print(f"📊 Connected to MongoDB: {settings.DATABASE_NAME}")
+    logger.info("HireQ API is starting up...")
+    logger.info("Connected to MongoDB: %s", settings.DATABASE_NAME)
     
-    # Pre-load ML models to avoid first-request lag
-    # Using singleton instances so models are reused across requests
-    print("⏳ Pre-loading ML models (this may take a moment)...")
+    logger.info("Pre-loading ML models...")
     try:
         from app.services.resume_parser import get_resume_parser
         from app.services.matching import get_matching_service
@@ -70,15 +68,15 @@ async def lifespan(app: FastAPI):
         # Initialize singleton services and pre-load models
         resume_parser = get_resume_parser()
         await resume_parser._initialize()
-        print("  ✅ spaCy NLP model loaded")
+        logger.info("spaCy NLP model loaded")
         
         matching_service = get_matching_service()
         await matching_service._initialize()
-        print("  ✅ Sentence-BERT model loaded")
+        logger.info("Sentence-BERT model loaded")
         
         sentiment_service = get_sentiment_service()
         await sentiment_service._initialize()
-        print("  ✅ Sentiment analysis model loaded")
+        logger.info("Sentiment analysis model loaded")
         
         # Initialize RAG and Chatbot services
         from app.services.rag import get_rag_service
@@ -90,16 +88,15 @@ async def lifespan(app: FastAPI):
         chatbot_service = get_chatbot_service()
         await chatbot_service._initialize()
         
-        print("✅ All ML models pre-loaded successfully!")
+        logger.info("All ML models pre-loaded successfully")
     except Exception as e:
-        print(f"⚠️ Warning: Could not pre-load some models: {e}")
-        print("  Models will load on first use instead.")
+        logger.warning("Could not pre-load some models: %s — will load on first use", e)
     
     yield
     
     # Shutdown
     await close_mongo_connection()
-    print("👋 HireQ API is shutting down...")
+    logger.info("HireQ API is shutting down")
 
 
 # Create FastAPI application
@@ -125,10 +122,13 @@ app = FastAPI(
 )
 
 # Configure CORS - Build allowed origins list
-allowed_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+allowed_origins = []
+
+if settings.ENVIRONMENT != "production":
+    allowed_origins.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ])
 
 # Add production frontend URL
 if settings.FRONTEND_URL:
@@ -168,15 +168,29 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Global exception handler for invalid ObjectId errors
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # Catch invalid BSON ObjectId errors and return 400 instead of 500
     err_msg = str(exc).lower()
     if "invalid id" in err_msg or "not a valid objectid" in err_msg or "bson" in err_msg:
         return JSONResponse(
             status_code=400,
             content={"detail": "Invalid ID format"},
         )
-    # Re-raise other exceptions to default handler
-    raise exc
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal error occurred. Please try again later."},
+    )
+
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
 
 
 # Request logging middleware
@@ -212,12 +226,14 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint - API health check."""
-    return {
+    result = {
         "message": "HireQ API",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/docs"
     }
+    if settings.ENVIRONMENT != "production":
+        result["docs"] = "/docs"
+    return result
 
 
 @app.get("/api/health", tags=["Health"])

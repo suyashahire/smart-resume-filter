@@ -195,10 +195,7 @@ export default function CandidateDashboardPage() {
       }
 
       const apps = appsData.applications || [];
-      const filtered = (jobsData || []).filter(
-        (j: { title?: string }) => j.title?.trim() !== 'Full Stack Developer'
-      );
-      setRecommendedJobs(filtered.slice(0, 4));
+      setRecommendedJobs((jobsData || []).slice(0, 4));
       setRecentApplications(apps.slice(0, 5));
       setProfile(profileData);
     } catch (error) {

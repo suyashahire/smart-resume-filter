@@ -276,8 +276,8 @@ function ResultsContent() {
               }));
               allScreenedResumes.push(...resultsWithJob);
             }
-          } catch (err) {
-            console.log(`No screening results for job ${job.id}`);
+          } catch {
+            // No screening results for this job
           }
         }
       }

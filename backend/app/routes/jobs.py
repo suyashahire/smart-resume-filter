@@ -7,7 +7,6 @@ from typing import List
 from datetime import datetime, timezone
 import logging
 
-from app.config import settings
 from app.models.user import User, UserRole
 from app.models.job import (
     JobDescription, JobDescriptionCreate, JobDescriptionResponse,
@@ -18,7 +17,7 @@ from app.models.screening import ScreeningResult, ScreeningResultResponse, Scree
 from app.models.application import Application, ApplicationStatus, StatusChange, ApplicationStatusUpdate
 from app.models.notification import Notification, NotificationType
 from app.models.message import DirectMessage, DirectConversation
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, require_hr
 from beanie import PydanticObjectId
 from app.services.job_parser import JobParserService
 from app.services.matching import get_matching_service
@@ -64,7 +63,7 @@ def _job_to_response(job: JobDescription) -> JobDescriptionResponse:
 @router.post("/", response_model=JobDescriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_job_description(
     job_data: JobDescriptionCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Create a new job description.
@@ -112,7 +111,7 @@ async def list_job_descriptions(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     active_only: bool = True,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """List all job descriptions created by the current user."""
     if active_only:
@@ -134,7 +133,7 @@ async def list_job_descriptions(
 @router.get("/{job_id}", response_model=JobDescriptionResponse)
 async def get_job_description(
     job_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Get a specific job description by ID."""
     job = await JobDescription.get(job_id)
@@ -158,7 +157,7 @@ async def get_job_description(
 async def update_job_description(
     job_id: str,
     job_update: JobDescriptionUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Update a job description."""
     job = await JobDescription.get(job_id)
@@ -194,7 +193,7 @@ async def update_job_description(
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_job_description(
     job_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Delete a job description."""
     job = await JobDescription.get(job_id)
@@ -234,7 +233,7 @@ async def delete_job_description(
 async def screen_candidates(
     job_id: str,
     screening_request: ScreeningRequest = None,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Screen candidates against a job description.
@@ -361,7 +360,7 @@ async def screen_candidates(
 @router.get("/{job_id}/results", response_model=List[ResumeWithScore])
 async def get_screening_results(
     job_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """Get screening results for a job description."""
     job = await JobDescription.get(job_id)
@@ -441,7 +440,7 @@ async def get_screening_results(
 @router.get("/{job_id}/applications/pending")
 async def get_pending_applications(
     job_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Get all applications pending approval for a job.
@@ -515,7 +514,7 @@ async def get_pending_applications(
 @router.put("/applications/{application_id}/approve")
 async def approve_application(
     application_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Approve a pending application.
@@ -650,7 +649,7 @@ async def approve_application(
                     await job.save()
                     
             except Exception as e:
-                print(f"\u26a0\ufe0f Screening failed for approved application {application.id}: {e}")
+                logger.warning("Screening failed for approved application %s: %s", application.id, e)
     
     await application.save()
     
@@ -689,7 +688,7 @@ async def approve_application(
 async def reject_application(
     application_id: str,
     reason: str = None,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Reject a pending application.
@@ -771,7 +770,7 @@ async def reject_application(
             )
             await notification.insert()
     except Exception as e:
-        print(f"\u26a0\ufe0f Failed to notify candidate of rejection: {e}")
+        logger.warning("Failed to notify candidate of rejection: %s", e)
     
     # Clean up the approval notification since it's now processed
     try:
@@ -792,7 +791,7 @@ async def reject_application(
 async def update_application_status(
     application_id: str,
     body: ApplicationStatusUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_hr),
 ):
     """
     Update an application's pipeline status (e.g. hired, rejected, interview, offer).
@@ -894,7 +893,7 @@ async def update_application_status(
             )
             await notification.insert()
         except Exception as e:
-            print(f"⚠️ Failed to create notification: {e}")
+            logger.warning("Failed to create notification: %s", e)
 
         # 2) Push WebSocket event to candidate
         try:
@@ -912,7 +911,7 @@ async def update_application_status(
                 user_id=candidate_id,
             )
         except Exception as e:
-            print(f"⚠️ WebSocket broadcast failed: {e}")
+            logger.warning("WebSocket broadcast failed: %s", e)
 
         # 3) Auto-send a direct message from HR to candidate
         if dm_content:
@@ -968,7 +967,7 @@ async def update_application_status(
                     user_id=candidate_id,
                 )
             except Exception as e:
-                print(f"⚠️ Failed to auto-send DM: {e}")
+                logger.warning("Failed to auto-send DM: %s", e)
 
     return {
         "message": f"Application status updated to {new_status.value}",
@@ -981,7 +980,7 @@ async def update_application_status(
 @router.get("/applications/by-status/{app_status}")
 async def get_applications_by_status(
     app_status: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_hr),
 ):
     """
     Get all applications with a specific status for jobs owned by this user.

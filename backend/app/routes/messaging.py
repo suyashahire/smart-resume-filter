@@ -4,6 +4,9 @@ Messaging routes for HR-Candidate chat functionality.
 
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import Optional, List
 import re as re_module
 
@@ -271,7 +274,7 @@ async def send_message(
         )
     except Exception as e:
         # Don't fail the send if broadcast fails
-        print(f"WebSocket broadcast failed: {e}")
+        logger.warning("WebSocket broadcast failed: %s", e)
     
     return MessageResponse(
         id=str(message.id),

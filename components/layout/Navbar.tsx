@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, Brain, LogOut, User, Settings, Mail, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar, UserPlus, Check, XCircle } from 'lucide-react';
+import { Menu, X, Brain, LogOut, User, Settings, Shield, ChevronDown, Sparkles, Bell, FileText, Target, Briefcase, MessageSquare, Trash2, Wifi, Calendar, UserPlus, Check, XCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import CalendarModal from '@/components/Calendar/CalendarModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -122,14 +122,13 @@ export default function Navbar() {
   const handleApproveApplication = async (applicationId: string, notificationId: string, dbId?: string) => {
     try {
       setProcessingApproval(applicationId);
-      const result = await api.approveApplication(applicationId);
+      await api.approveApplication(applicationId);
       dismissNotification(notificationId);
       // Delete notification from DB using the actual DB ID
       const idToDelete = dbId || notificationId;
       try { await api.deleteNotification(idToDelete); } catch { }
       // Trigger results page refresh
       bumpResultsVersion();
-      console.log('Application approved:', result);
     } catch (error) {
       console.error('Failed to approve application:', error);
       alert(error instanceof Error ? error.message : 'Failed to approve application');
@@ -142,14 +141,13 @@ export default function Navbar() {
   const handleRejectApplication = async (applicationId: string, notificationId: string, dbId?: string) => {
     try {
       setProcessingApproval(applicationId);
-      const result = await api.rejectApplication(applicationId);
+      await api.rejectApplication(applicationId);
       dismissNotification(notificationId);
       // Delete notification from DB using the actual DB ID
       const idToDelete = dbId || notificationId;
       try { await api.deleteNotification(idToDelete); } catch { }
       // Trigger results page refresh
       bumpResultsVersion();
-      console.log('Application rejected:', result);
     } catch (error) {
       console.error('Failed to reject application:', error);
       alert(error instanceof Error ? error.message : 'Failed to reject application');

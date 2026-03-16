@@ -29,9 +29,12 @@ db = Database()
 
 async def connect_to_mongo():
     """Connect to MongoDB and initialize Beanie ODM."""
-    db.client = AsyncIOMotorClient(settings.MONGODB_URI)
+    db.client = AsyncIOMotorClient(
+        settings.MONGODB_URI,
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=5000,
+    )
     
-    # Initialize Beanie with document models
     await init_beanie(
         database=db.client[settings.DATABASE_NAME],
         document_models=[
@@ -47,18 +50,10 @@ async def connect_to_mongo():
             Notification,
         ]
     )
-    
-    print(f"✅ Connected to MongoDB: {settings.DATABASE_NAME}")
 
 
 async def close_mongo_connection():
     """Close MongoDB connection."""
     if db.client:
         db.client.close()
-        print("❌ Disconnected from MongoDB")
-
-
-def get_database():
-    """Get database instance."""
-    return db.client[settings.DATABASE_NAME]
 

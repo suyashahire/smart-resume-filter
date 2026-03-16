@@ -6,14 +6,15 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import FileResponse
 from typing import Optional
 from datetime import datetime, timezone
-import os
+import logging
 
-from app.config import settings
+logger = logging.getLogger(__name__)
+
 from app.models.user import User
 from app.models.resume import Resume
 from app.models.interview import Interview
 from app.models.screening import ScreeningResult
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, require_hr
 from app.services.report_generator import ReportGeneratorService
 
 router = APIRouter()
@@ -26,7 +27,7 @@ report_generator = ReportGeneratorService()
 async def get_candidate_report(
     resume_id: str,
     job_id: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Get a comprehensive report for a candidate.
@@ -139,7 +140,7 @@ async def get_candidate_report(
 async def download_candidate_report_pdf(
     resume_id: str,
     job_id: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Download a candidate report as PDF.
@@ -156,20 +157,21 @@ async def download_candidate_report_pdf(
         
         return FileResponse(
             path=pdf_path,
-            filename=f"candidate_report_{report_data['name'].replace(' ', '_')}.pdf",
+            filename=f"candidate_report_{(report_data.get('name') or 'unknown').replace(' ', '_')}.pdf",
             media_type="application/pdf"
         )
         
     except Exception as e:
+        logger.exception("Failed to generate PDF for resume %s", resume_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate PDF: {str(e)}"
+            detail="Failed to generate PDF. Please try again later."
         )
 
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Get dashboard statistics for the current user.
@@ -261,7 +263,7 @@ async def get_dashboard_stats(
 
 @router.delete("/cleanup/orphaned-screening-results")
 async def cleanup_orphaned_screening_results(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_hr)
 ):
     """
     Clean up orphaned screening results.

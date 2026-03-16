@@ -12,7 +12,7 @@ from app.models.resume import Resume
 from app.models.job import JobDescription
 from app.routes.auth import get_current_user
 from app.services.matching import get_matching_service
-from app.services.rag import RAGService
+from app.services.rag import RAGService, get_rag_service
 from app.limiter import limiter
 
 router = APIRouter()
@@ -228,9 +228,9 @@ async def get_resume_insights(resume_id: str, current_user: User = Depends(get_c
         candidate_skills = pd.skills or []
 
         # --- Match Score: use MatchingService against top relevant jobs ---
+        job_ids = []
         try:
-            # Try RAG-based job discovery first
-            rag = RAGService()
+            rag = get_rag_service()
             await rag._initialize()
             matching = get_matching_service()
             await matching._initialize()

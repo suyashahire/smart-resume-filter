@@ -65,12 +65,18 @@ async function apiRequest<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && isBrowser) {
+      setAuthToken(null);
+      const isCandidate = window.location.pathname.startsWith('/candidate');
+      window.location.href = isCandidate ? '/candidate/login' : '/login';
+      throw new Error('Session expired. Please log in again.');
+    }
+
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
     let message = `HTTP ${response.status}`;
     if (typeof error.detail === 'string') {
       message = error.detail;
     } else if (Array.isArray(error.detail)) {
-      // FastAPI validation errors return detail as an array of objects
       message = error.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join('; ');
     } else if (error.detail) {
       message = JSON.stringify(error.detail);
