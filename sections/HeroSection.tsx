@@ -121,22 +121,37 @@ export default function HeroSection() {
                 </motion.div>
             </div>
 
-            {/* Scrolling logos strip — like sarvam "India Builds With" */}
+            {/* Trusted By — minimal trust signal */}
             <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.7 }}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.7, ease: 'easeOut' }}
                 className="relative z-10 w-full mt-auto pb-10"
             >
-                <p className="text-[11px] font-semibold tracking-[0.2em] uppercase text-gray-400 text-center mb-5">
-                    Trusted by modern teams
+                {/* Subtle gradient divider */}
+                <div className="mx-auto mb-8 h-px w-[280px] md:w-[400px]" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(156,163,175,0.25) 50%, transparent 100%)' }} />
+
+                {/* Label */}
+                <p className="text-center text-[12px] font-semibold tracking-[0.18em] uppercase text-gray-400 mb-3">
+                    Trusted by
                 </p>
-                <div className="flex items-center justify-center gap-10 md:gap-16 opacity-40">
-                    {['TechCorp', 'InnoHire', 'ScaleUp', 'TalentAI', 'PeopleFirst'].map((name) => (
-                        <span key={name} className="text-[15px] md:text-[17px] font-bold text-gray-500 tracking-wide whitespace-nowrap select-none">
-                            {name}
-                        </span>
-                    ))}
+
+                {/* Audience categories */}
+                <div
+                    className="relative flex items-center justify-center"
+                    style={{ WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)', maskImage: 'linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)' }}
+                >
+                    <p className="text-[14px] md:text-[15px] font-medium text-gray-600 text-center flex-wrap flex items-center justify-center gap-x-1.5 gap-y-1 px-4">
+                        <span>Freelancers</span>
+                        <span className="text-gray-400/70 select-none">·</span>
+                        <span>Startups</span>
+                        <span className="text-gray-400/70 select-none">·</span>
+                        <span>HR Teams</span>
+                        <span className="text-gray-400/70 select-none">·</span>
+                        <span>Recruiters</span>
+                        <span className="text-gray-400/70 select-none">·</span>
+                        <span>Agencies</span>
+                    </p>
                 </div>
             </motion.div>
         </section>
