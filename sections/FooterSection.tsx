@@ -8,7 +8,7 @@ const footerLinks: Record<string, { label: string; href: string; external?: bool
         { label: 'Recruiter Portal', href: '/login' },
         { label: 'Candidate Portal', href: '/candidate/login' },
     ],
-    API: [
+    MODELS: [
         { label: 'Sentence-BERT', href: '#models' },
         { label: 'spaCy NLP', href: '#models' },
         { label: 'Whisper', href: '#models' },

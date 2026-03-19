@@ -8,19 +8,19 @@ import SectionContainer from '@/components/landing/SectionContainer';
 const testimonials = [
     {
         quote: 'HireQ reduced our time-to-hire by 60%. The AI screening is incredibly accurate and the candidate ranking saves our team hours every week.',
-        name: 'Priya Sharma',
-        role: 'VP of Talent',
+        name: 'Priya',
+        role: 'HR',
         accent: 'from-orange-400 to-amber-400',
     },
     {
         quote: 'The interview analysis feature is a game-changer. We now have data-backed insights for every candidate conversation, not just gut feelings.',
-        name: 'Rahul Mehta',
-        role: 'Head of HR',
+        name: 'Rahul',
+        role: 'Freelancer',
         accent: 'from-blue-400 to-indigo-400',
     },
     {
         quote: 'As a candidate, the portal made job hunting effortless. I could track my applications in real-time and the feedback was genuinely helpful.',
-        name: 'Ananya Verma',
+        name: 'Ananya',
         role: 'Software Engineer',
         accent: 'from-purple-400 to-violet-400',
     },
