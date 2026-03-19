@@ -25,13 +25,11 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value
     || request.headers.get('authorization')?.replace('Bearer ', '');
 
-  const hasLocalStorageToken = request.cookies.get('has_session')?.value === '1';
-
-  if (!token && !hasLocalStorageToken) {
+  if (!token) {
     const isCandidate = pathname.startsWith('/candidate');
     const loginUrl = new URL(isCandidate ? '/candidate/login' : '/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.next();
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();

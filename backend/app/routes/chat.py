@@ -102,12 +102,15 @@ async def send_message(
 
 
 @router.post("/message/anonymous", response_model=ChatResponse)
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def send_message_anonymous(request: Request, body: ChatRequest):
     """
     Send a message without authentication.
     Uses a temp conversation per session (no persistence).
     Uses context field to select appropriate system prompt.
+    
+    Rate-limited to 5/min per IP to prevent abuse.
+    TODO: Add CAPTCHA verification before production launch.
     """
     chatbot = get_chatbot_service()
     await chatbot._initialize()
@@ -216,8 +219,8 @@ async def reindex_rag(current_user: User = Depends(require_admin)):
 
 
 @router.get("/status")
-async def chatbot_status():
-    """Get chatbot and RAG status (public endpoint)."""
+async def chatbot_status(current_user: User = Depends(get_current_user)):
+    """Get chatbot and RAG status (requires authentication)."""
     chatbot = get_chatbot_service()
     rag = get_rag_service()
     
@@ -230,3 +233,19 @@ async def chatbot_status():
         },
         "rag": rag_stats
     }
+
+
+@router.get("/healthz")
+async def health_check():
+    """Health check endpoint for load balancers and monitoring."""
+    try:
+        from app.database import db
+        # Ping MongoDB to verify connectivity
+        await db.client.admin.command('ping')
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+        )

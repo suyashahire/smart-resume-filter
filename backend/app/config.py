@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Frontend URL (for CORS)
     FRONTEND_URL: str = "http://localhost:3000"
     
+    # Error Tracking
+    SENTRY_DSN: str = ""
+    
     # File Upload Configuration
     MAX_FILE_SIZE_MB: int = 10
     ALLOWED_RESUME_EXTENSIONS: str = ".pdf,.docx"
@@ -83,6 +86,7 @@ settings = Settings()
 _INSECURE_SECRETS = {
     "your-super-secret-jwt-key-change-in-production",
     "change-this-in-production-minimum-64-characters-long",
+    "CHANGE-ME-generate-a-64-char-random-secret",
 }
 if settings.ENVIRONMENT == "production":
     if settings.JWT_SECRET_KEY in _INSECURE_SECRETS:

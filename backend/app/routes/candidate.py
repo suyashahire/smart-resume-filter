@@ -382,10 +382,39 @@ async def get_my_applications(
     total_count = await Application.find({"candidate_id": str(current_user.id)}).count()
     applications = await query.skip(skip).limit(limit).to_list()
     
-    # Build response with job details
+    # Batch-fetch all referenced jobs to avoid N+1 queries
+    job_ids = list({app.job_id for app in applications if app.job_id})
+    if job_ids:
+        from beanie import PydanticObjectId
+        valid_ids = []
+        for jid in job_ids:
+            try:
+                valid_ids.append(PydanticObjectId(jid))
+            except Exception:
+                pass
+        jobs_list = await JobDescription.find({"_id": {"$in": valid_ids}}).to_list()
+        job_map = {str(j.id): j for j in jobs_list}
+    else:
+        job_map = {}
+    
+    # Batch-fetch screening results
+    screening_ids = list({app.screening_result_id for app in applications if app.screening_result_id})
+    if screening_ids:
+        valid_sr_ids = []
+        for sid in screening_ids:
+            try:
+                valid_sr_ids.append(PydanticObjectId(sid))
+            except Exception:
+                pass
+        sr_list = await ScreeningResult.find({"_id": {"$in": valid_sr_ids}}).to_list()
+        sr_map = {str(sr.id): sr for sr in sr_list}
+    else:
+        sr_map = {}
+    
+    # Build response with pre-fetched data
     result = []
     for app in applications:
-        job = await JobDescription.get(app.job_id)
+        job = job_map.get(app.job_id)
         
         # Get screening result if available
         score = None
@@ -394,7 +423,7 @@ async def get_my_applications(
         feedback_at = None
         
         if app.screening_result_id:
-            screening = await ScreeningResult.get(app.screening_result_id)
+            screening = sr_map.get(app.screening_result_id)
             if screening:
                 score_visible = screening.score_visible_to_candidate
                 if score_visible:

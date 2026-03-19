@@ -2,7 +2,7 @@
 Job Description routes for creating and managing job postings.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status, Query
+from fastapi import APIRouter, HTTPException, Depends, status, Query, Request
 from typing import List
 from datetime import datetime, timezone
 import logging
@@ -22,6 +22,7 @@ from beanie import PydanticObjectId
 from app.services.job_parser import JobParserService
 from app.services.matching import get_matching_service
 from app.services.websocket_manager import get_connection_manager, EventType
+from app.limiter import limiter
 
 def _to_object_ids(str_ids: list) -> list:
     """Convert a list of string IDs to PydanticObjectId, skipping invalid ones."""
@@ -61,7 +62,9 @@ def _job_to_response(job: JobDescription) -> JobDescriptionResponse:
 
 
 @router.post("/", response_model=JobDescriptionResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/hour")
 async def create_job_description(
+    request: Request,
     job_data: JobDescriptionCreate,
     current_user: User = Depends(require_hr)
 ):
@@ -70,14 +73,24 @@ async def create_job_description(
     
     The system will automatically extract required skills from the description.
     """
+    # Sanitize text inputs to prevent stored XSS
+    try:
+        import bleach
+        safe_title = bleach.clean(job_data.title, tags=[], strip=True)
+        safe_description = bleach.clean(job_data.description, tags=[], strip=True)
+    except ImportError:
+        import re as _re
+        safe_title = _re.sub(r'<[^>]+>', '', job_data.title)
+        safe_description = _re.sub(r'<[^>]+>', '', job_data.description)
+
     # Extract skills from description
-    extracted_skills = await job_parser.extract_skills(job_data.description)
+    extracted_skills = await job_parser.extract_skills(safe_description)
     
     # Create job description
     job = JobDescription(
         user_id=str(current_user.id),
-        title=job_data.title,
-        description=job_data.description,
+        title=safe_title,
+        description=safe_description,
         required_skills=extracted_skills,
         experience_required=job_data.experience_required,
         education_required=job_data.education_required,
@@ -174,15 +187,31 @@ async def update_job_description(
             detail="Not authorized to update this job description"
         )
     
-    # Update fields
+    # Sanitize text inputs to prevent stored XSS (same as create)
     update_data = job_update.model_dump(exclude_unset=True)
+    
+    if "title" in update_data:
+        try:
+            import bleach
+            update_data["title"] = bleach.clean(update_data["title"], tags=[], strip=True)
+        except ImportError:
+            import re as _re
+            update_data["title"] = _re.sub(r'<[^>]+>', '', update_data["title"])
+    
+    if "description" in update_data:
+        try:
+            import bleach
+            update_data["description"] = bleach.clean(update_data["description"], tags=[], strip=True)
+        except ImportError:
+            import re as _re
+            update_data["description"] = _re.sub(r'<[^>]+>', '', update_data["description"])
     
     for field, value in update_data.items():
         setattr(job, field, value)
     
     # Re-extract skills if description changed
     if job_update.description:
-        job.required_skills = await job_parser.extract_skills(job_update.description)
+        job.required_skills = await job_parser.extract_skills(job.description)
     
     job.updated_at = datetime.now(timezone.utc)
     await job.save()
@@ -230,7 +259,9 @@ async def delete_job_description(
 
 
 @router.post("/{job_id}/screen", response_model=List[ResumeWithScore])
+@limiter.limit("5/minute")
 async def screen_candidates(
+    request: Request,
     job_id: str,
     screening_request: ScreeningRequest = None,
     current_user: User = Depends(require_hr)
@@ -269,11 +300,18 @@ async def screen_candidates(
             if resume and resume.user_id == str(current_user.id):
                 resumes.append(resume)
     else:
-        # Screen all user's resumes
+        # Screen all user's resumes (capped to prevent unbounded ML computation)
+        MAX_SCREEN_BATCH = 200
         resumes = await Resume.find(
             Resume.user_id == str(current_user.id),
             Resume.is_parsed == True
-        ).to_list()
+        ).limit(MAX_SCREEN_BATCH).to_list()
+        if len(resumes) == MAX_SCREEN_BATCH:
+            logger.warning(
+                "screen_candidates hit batch limit (%d) for user %s job %s — "
+                "consider passing explicit resume_ids for targeted screening",
+                MAX_SCREEN_BATCH, str(current_user.id), job_id,
+            )
     
     if not resumes:
         raise HTTPException(

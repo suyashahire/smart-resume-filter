@@ -17,6 +17,20 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
 from app.limiter import limiter
+
+# --- Sentry Error Tracking ---
+try:
+    import sentry_sdk
+    sentry_dsn = getattr(settings, 'SENTRY_DSN', None) or ""
+    if sentry_dsn:
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=0.2,
+            environment=settings.ENVIRONMENT,
+        )
+        logging.getLogger(__name__).info("Sentry initialized for %s", settings.ENVIRONMENT)
+except ImportError:
+    pass  # sentry-sdk not installed — skip silently
 from app.routes import auth, resumes, jobs, interviews, reports, realtime, chat, candidate, admin, messaging, insights, notifications
 
 # ── Structured logging configuration ────────────────────────────
@@ -141,12 +155,10 @@ if settings.FRONTEND_URL:
 
 # Support Vercel preview deployments (only project-specific)
 cors_origin_regex = None
-if settings.ENVIRONMENT == "production" and settings.FRONTEND_URL:
+if settings.FRONTEND_URL and "vercel.app" in settings.FRONTEND_URL:
     # Only allow Vercel URLs matching our project slug
     cors_origin_regex = r"https://smart-resume-filter[\w-]*\.vercel\.app"
-else:
-    # In development, allow any vercel preview
-    cors_origin_regex = r"https://.*\.vercel\.app"
+# In development, no wildcard regex — only the explicit localhost origins above
 
 app.add_middleware(
     CORSMiddleware,

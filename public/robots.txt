@@ -1,0 +1,18 @@
+# HireQ — AI-Powered Recruitment Platform
+# https://hireq.app
+
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /candidate/login
+
+# Protected application pages (require auth)
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /candidate/portal
+Disallow: /api/
+
+# Crawl-delay (be polite)
+Crawl-delay: 1
+
+Sitemap: https://hireq.app/sitemap.xml

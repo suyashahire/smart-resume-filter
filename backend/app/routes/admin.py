@@ -5,6 +5,7 @@ Admin routes for user management and approval.
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from datetime import datetime, timezone
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 from typing import Optional, List
@@ -320,9 +321,74 @@ async def delete_user(
             detail="Cannot delete admin accounts"
         )
     
+    # Cascade delete all user data
+    user_id_str = str(user.id)
+    
+    try:
+        from app.models.resume import Resume
+        from app.models.screening import ScreeningResult
+        from app.models.application import Application
+        from app.models.message import DirectMessage, DirectConversation
+        from app.models.notification import Notification
+        from app.models.job import JobDescription
+        
+        # Count everything before deleting for audit logging
+        resume_count = await Resume.find({"user_id": user_id_str}).count()
+        screening_count = await ScreeningResult.find({"user_id": user_id_str}).count()
+        application_count = await Application.find({"candidate_id": user_id_str}).count()
+        message_count = await DirectMessage.find({"sender_id": user_id_str}).count()
+        conversation_count = await DirectConversation.find({
+            "$or": [{"hr_user_id": user_id_str}, {"candidate_user_id": user_id_str}]
+        }).count()
+        notification_count = await Notification.find({"recipient_id": user_id_str}).count()
+        job_count = await JobDescription.find({"user_id": user_id_str}).count()
+        
+        # Delete resume files from disk + documents
+        user_resumes = await Resume.find({"user_id": user_id_str}).to_list()
+        for resume in user_resumes:
+            if resume.file_path and os.path.exists(resume.file_path):
+                os.remove(resume.file_path)
+        await Resume.find({"user_id": user_id_str}).delete()
+        
+        # Delete screening results
+        await ScreeningResult.find({"user_id": user_id_str}).delete()
+        
+        # Delete applications
+        await Application.find({"candidate_id": user_id_str}).delete()
+        
+        # Delete messages sent by user
+        await DirectMessage.find({"sender_id": user_id_str}).delete()
+        
+        # Delete conversations where user is a participant
+        await DirectConversation.find({
+            "$or": [{"hr_user_id": user_id_str}, {"candidate_user_id": user_id_str}]
+        }).delete()
+        
+        # Delete notifications
+        await Notification.find({"recipient_id": user_id_str}).delete()
+        
+        # Delete jobs created by user (and their screening results)
+        user_jobs = await JobDescription.find({"user_id": user_id_str}).to_list()
+        job_screening_count = 0
+        for job in user_jobs:
+            count = await ScreeningResult.find({"job_id": str(job.id)}).count()
+            job_screening_count += count
+            await ScreeningResult.find({"job_id": str(job.id)}).delete()
+        await JobDescription.find({"user_id": user_id_str}).delete()
+        
+        logger.info(
+            "admin.cascade_delete user=%s resumes=%d screenings=%d applications=%d "
+            "messages=%d conversations=%d notifications=%d jobs=%d job_screenings=%d",
+            user_id_str, resume_count, screening_count, application_count,
+            message_count, conversation_count, notification_count, job_count, job_screening_count,
+        )
+        
+    except Exception as e:
+        logger.warning("Error during cascade delete for user %s: %s", user_id_str, e)
+    
     await user.delete()
     
-    return {"message": "User deleted successfully"}
+    return {"message": "User and all associated data deleted successfully"}
 
 
 # ==================== Statistics ====================

@@ -624,20 +624,14 @@ export const useStore = create<StoreState>()(
         state?.setIsHydrated(true);
       },
       partialize: (state) => ({
-        user: state.user,
+        // Only persist safe, non-PII UI state
         isAuthenticated: state.isAuthenticated,
         useRealApi: state.useRealApi,
         shortlistedIds: Array.from(state.shortlistedIds),
-        // Persist candidate data
-        resumes: state.resumes,
-        filteredResumes: state.filteredResumes,
-        jobDescription: state.jobDescription,
-        interviews: state.interviews,
-        // Multi-job data
-        jobs: state.jobs,
+        // Multi-job data (IDs and assignments only, no PII)
         currentJobId: state.currentJobId,
         candidateJobAssignments: state.candidateJobAssignments,
-        // Notes, Tags & Activities
+        // Notes, Tags & Activities (user-created metadata)
         candidateNotes: state.candidateNotes,
         candidateTags: state.candidateTags,
         availableTags: state.availableTags,

@@ -229,8 +229,13 @@ async def send_message(
         )
         await conversation.insert()
     
-    # Create message (strip HTML tags to prevent stored XSS)
-    sanitized_content = re_module.sub(r'<[^>]+>', '', message_data.content)
+    # Create message — sanitize HTML to prevent stored XSS
+    try:
+        import bleach
+        sanitized_content = bleach.clean(message_data.content, tags=[], strip=True)
+    except ImportError:
+        # Fallback: strip tags via regex (less robust)
+        sanitized_content = re_module.sub(r'<[^>]+>', '', message_data.content)
     message = DirectMessage(
         conversation_id=str(conversation.id),
         sender_id=sender_id,

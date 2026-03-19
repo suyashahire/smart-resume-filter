@@ -40,6 +40,8 @@ class ConnectionManager:
     Singleton pattern to ensure single instance across the app.
     """
     
+    MAX_CONNECTIONS_PER_USER = 5
+    
     _instance = None
     
     def __new__(cls):
@@ -68,6 +70,20 @@ class ConnectionManager:
         # Add to user-specific connections
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
+        
+        # Enforce per-user connection limit — close oldest if at cap
+        while len(self.active_connections[user_id]) >= self.MAX_CONNECTIONS_PER_USER:
+            oldest_ws = self.active_connections[user_id][0]
+            logger.info(
+                "WebSocket per-user limit (%d) reached for user=%s, closing oldest connection",
+                self.MAX_CONNECTIONS_PER_USER, user_id,
+            )
+            try:
+                await oldest_ws.close(code=4002, reason="Connection limit reached")
+            except Exception:
+                pass
+            self.disconnect(oldest_ws)
+        
         self.active_connections[user_id].append(websocket)
         
         # Add to all connections

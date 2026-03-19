@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, ComponentType } from 'react';
+import { useState, useEffect, Suspense, ComponentType, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -14,6 +14,7 @@ import {
 import { useStore } from '@/store/useStore';
 import { useTheme } from '@/contexts/ThemeContext';
 import * as api from '@/lib/api';
+import { useDebounceCallback } from '@/hooks/useDebounce';
 
 /* ─── reusable toggle ─── */
 function Toggle({ enabled, onChange, accentColor = 'cyan' }: { enabled: boolean; onChange: () => void; accentColor?: string }) {
@@ -36,8 +37,8 @@ function PasswordStrength({ password }: { password: string }) {
   const getStrength = () => {
     if (!password) return { score: 0, label: '', color: '' };
     let s = 0;
-    if (password.length >= 6) s++;
-    if (password.length >= 10) s++;
+    if (password.length >= 12) s++;
+    if (password.length >= 16) s++;
     if (/[A-Z]/.test(password)) s++;
     if (/\d/.test(password)) s++;
     if (/[^A-Za-z0-9]/.test(password)) s++;
@@ -139,6 +140,7 @@ function ProfileContent() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -160,7 +162,7 @@ function ProfileContent() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleUpdateProfile = async () => {
+  const handleUpdateProfile = useDebounceCallback(async () => {
     if (!name.trim()) { showMsg('error', 'Name cannot be empty'); return; }
     if (!email.trim() || !email.includes('@')) { showMsg('error', 'Please enter a valid email'); return; }
     setSaving(true);
@@ -170,11 +172,11 @@ function ProfileContent() {
       showMsg('success', 'Profile updated successfully');
     } catch { showMsg('error', 'Failed to update profile'); }
     finally { setSaving(false); }
-  };
+  });
 
-  const handleChangePassword = async () => {
+  const handleChangePassword = useDebounceCallback(async () => {
     if (!currentPassword) { showMsg('error', 'Please enter your current password'); return; }
-    if (newPassword.length < 6) { showMsg('error', 'New password must be at least 6 characters'); return; }
+    if (newPassword.length < 12) { showMsg('error', 'New password must be at least 12 characters'); return; }
     if (newPassword !== confirmPassword) { showMsg('error', 'Passwords do not match'); return; }
     setSaving(true);
     try {
@@ -183,7 +185,7 @@ function ProfileContent() {
       showMsg('success', 'Password changed successfully');
     } catch { showMsg('error', 'Failed to change password. Check your current password.'); }
     finally { setSaving(false); }
-  };
+  });
 
   const handleExportData = async () => {
     try {
@@ -197,12 +199,13 @@ function ProfileContent() {
     } catch { showMsg('error', 'Failed to export data'); }
   };
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = useDebounceCallback(async () => {
+    if (!deletePassword) { showMsg('error', 'Please enter your password to confirm deletion'); return; }
     try {
-      if (useRealApi) await api.deleteAccount();
+      if (useRealApi) await api.deleteAccount(deletePassword);
       logout(); router.push('/login');
-    } catch { showMsg('error', 'Failed to delete account'); }
-  };
+    } catch { showMsg('error', 'Failed to delete account. Check your password.'); }
+  });
 
   const handleLogout = async () => {
     if (useRealApi) { try { await api.logout(); } catch (e) { console.error('Logout error:', e); } }
@@ -558,12 +561,24 @@ function ProfileContent() {
                             Are you sure? This action cannot be undone.
                           </p>
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Enter your password to confirm</label>
+                          <div className="relative group">
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                            <input
+                              type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)}
+                              className="w-full pl-11 pr-4 py-3 rounded-xl border border-red-500/30 bg-white/[0.03] text-white placeholder-gray-500 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 focus:outline-none transition-all"
+                              placeholder="Your current password"
+                            />
+                          </div>
+                        </div>
                         <div className="flex gap-3">
                           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleDeleteAccount}
-                            className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors">
+                            disabled={!deletePassword}
+                            className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             Yes, Delete My Account
                           </motion.button>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowDeleteConfirm(false)}
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }}
                             className="px-5 py-2.5 rounded-xl border border-white/[0.08] text-gray-300 text-sm font-medium hover:bg-white/[0.04] transition-colors">
                             Cancel
                           </motion.button>

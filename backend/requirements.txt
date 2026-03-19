@@ -52,6 +52,7 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 email-validator==2.1.0.post1
 aiofiles==23.2.1
+bleach==6.1.0
 
 # AI Chatbot
 google-genai==1.7.0
@@ -59,6 +60,9 @@ chromadb==0.6.3
 
 # CORS
 starlette==0.35.1
+
+# Error Tracking (optional — set SENTRY_DSN to enable)
+sentry-sdk[fastapi]==1.40.0
 
 # Email
 resend==2.5.0

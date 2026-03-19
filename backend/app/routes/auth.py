@@ -5,6 +5,7 @@ Authentication routes for user registration, login, and management.
 import logging
 import re
 from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timedelta, timezone
@@ -29,7 +30,7 @@ LOCKOUT_DURATION_MINUTES = 15
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -57,16 +58,51 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-    """Get the current authenticated user from JWT token."""
+def _set_auth_cookie(response: JSONResponse, token: str) -> None:
+    """Set the JWT as an HttpOnly, Secure, SameSite cookie."""
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="lax",
+        max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: JSONResponse) -> None:
+    """Delete the auth cookie."""
+    response.delete_cookie(
+        key="auth_token",
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="lax",
+        path="/",
+    )
+
+
+async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)) -> User:
+    """Get the current authenticated user from JWT token.
+    
+    Checks the Authorization header first, then falls back to the
+    HttpOnly auth_token cookie.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    # Fall back to cookie if no Bearer token was provided
+    effective_token = token
+    if not effective_token:
+        effective_token = request.cookies.get("auth_token")
+    if not effective_token:
+        raise credentials_exception
+    
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(effective_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
         token_ver: int = payload.get("tv", 0)
         
@@ -201,13 +237,16 @@ async def register(request: Request, user_data: UserCreate):
     
     - **name**: User's full name
     - **email**: User's email address (must be unique)
-    - **password**: Password (minimum 8 characters, must contain letter + digit)
+    - **password**: Password (minimum 12 characters, must contain letter + digit)
     - **role**: User role (hr_manager, admin, viewer, candidate)
     
     Registration behavior:
     - Candidates: Immediately active (account_status=approved)
     - HR Managers: Pending admin approval (account_status=pending, is_active=false)
     - Admins: Can only be created by existing admins
+    
+    TODO(pre-launch): Implement email verification before auto-approving candidates.
+    Without it, attackers can create unlimited accounts with any email address.
     """
     # Check if user already exists
     existing_user = await User.find_one(User.email == user_data.email)
@@ -325,10 +364,12 @@ async def login_json(request: Request, login_data: UserLogin):
     
     - **email**: User's email address
     - **password**: User's password
+    
+    Sets an HttpOnly cookie with the JWT token.
     """
     user, access_token = await _authenticate_user(login_data.email, login_data.password, request)
     
-    return Token(
+    body = Token(
         access_token=access_token,
         user=UserResponse(
             id=str(user.id),
@@ -343,6 +384,9 @@ async def login_json(request: Request, login_data: UserLogin):
             last_login=user.last_login
         )
     )
+    response = JSONResponse(content=body.model_dump(mode="json"), status_code=200)
+    _set_auth_cookie(response, access_token)
+    return response
 
 
 @router.get("/me", response_model=UserResponse)
@@ -420,6 +464,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.post("/change-password")
+@limiter.limit("5/minute")
 async def change_password(
     request: Request,
     data: ChangePasswordRequest,
@@ -429,7 +474,7 @@ async def change_password(
     Change the current user's password.
     
     - **current_password**: Current password for verification
-    - **new_password**: New password (minimum 8 characters, must contain letter + digit)
+    - **new_password**: New password (minimum 12 characters, must contain letter + digit)
     """
     # Verify current password
     if not verify_password(data.current_password, current_user.password_hash):
@@ -446,24 +491,37 @@ async def change_password(
     
     logger.info("auth.password_changed user_id=%s", str(current_user.id))
     
-    return {"message": "Password changed successfully. Please log in again."}
+    response = JSONResponse(content={"message": "Password changed successfully. Please log in again."})
+    _clear_auth_cookie(response)
+    return response
+
+
+class DeleteAccountRequest(BaseModel):
+    """Schema for account deletion — requires password re-authentication."""
+    password: str
 
 
 @router.delete("/account")
+@limiter.limit("3/minute")
 async def delete_account(
+    request: Request,
+    data: DeleteAccountRequest,
     current_user: User = Depends(get_current_user)
 ):
     """
     Delete the current user's account and all associated data.
     
-    This is irreversible. Cascades deletes to:
-    - Resumes
-    - Applications
-    - Screening results
-    - Interviews
-    - Conversations
-    - Notifications
+    Requires password re-authentication. This is irreversible.
+    Cascades deletes to: Resumes, Applications, Screening results,
+    Interviews, Conversations, Notifications.
     """
+    # Re-authenticate before destructive action
+    if not verify_password(data.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Incorrect password. Account deletion requires password confirmation."
+        )
+    
     from app.models.resume import Resume
     from app.models.application import Application
     from app.models.screening import ScreeningResult
@@ -504,7 +562,9 @@ async def delete_account(
     # Finally delete the user
     await current_user.delete()
     
-    return {"message": "Account deleted successfully"}
+    response = JSONResponse(content={"message": "Account deleted successfully"})
+    _clear_auth_cookie(response)
+    return response
 
 
 @router.post("/logout")
@@ -512,8 +572,16 @@ async def logout(current_user: User = Depends(get_current_user)):
     """
     Logout the current user.
     
-    Note: Since we use JWT tokens, logout is handled client-side by removing the token.
-    This endpoint is for logging purposes.
+    Invalidates all existing tokens by incrementing the token version,
+    and clears the auth cookie.
     """
-    return {"message": "Successfully logged out", "user": current_user.email}
+    # Invalidate all existing JWTs for this user
+    current_user.token_version = getattr(current_user, 'token_version', 0) + 1
+    await current_user.save()
+    
+    logger.info("auth.logout user_id=%s", str(current_user.id))
+    
+    response = JSONResponse(content={"message": "Successfully logged out"})
+    _clear_auth_cookie(response)
+    return response
 

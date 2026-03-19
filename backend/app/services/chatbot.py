@@ -520,18 +520,22 @@ class ChatbotService:
                     )
                 ]
                 
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.models.generate_content(
-                        model=self.model_name,
-                        contents=contents,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            temperature=0.7,
-                            top_p=0.9,
-                            max_output_tokens=1024,
+                GEMINI_TIMEOUT_SECONDS = 30
+                response = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self.client.models.generate_content(
+                            model=self.model_name,
+                            contents=contents,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_prompt,
+                                temperature=0.7,
+                                top_p=0.9,
+                                max_output_tokens=1024,
+                            )
                         )
-                    )
+                    ),
+                    timeout=GEMINI_TIMEOUT_SECONDS,
                 )
                 
                 return {
@@ -542,6 +546,9 @@ class ChatbotService:
                     "user_context_used": bool(user_context),
                 }
                 
+            except asyncio.TimeoutError:
+                logger.warning("Gemini API call timed out after %ds", GEMINI_TIMEOUT_SECONDS)
+                return await self._fallback_response(safe_message, rag_context, sources, user, context)
             except Exception as e:
                 logger.warning("Gemini error: %s", e)
                 # Fall back to smart fallback
@@ -709,15 +716,18 @@ class ChatbotService:
                     f"Generate a very short title (3-6 words max) for a conversation that starts with: '{first_message}'. "
                     f"Return ONLY the title, no quotes or extra text."
                 )
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self.client.models.generate_content(
-                        model=self.model_name,
-                        contents=prompt,
-                    )
+                response = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self.client.models.generate_content(
+                            model=self.model_name,
+                            contents=prompt,
+                        )
+                    ),
+                    timeout=10,
                 )
                 return response.text.strip().strip('"\'')[:60]
-            except Exception:
+            except (asyncio.TimeoutError, Exception):
                 pass
         
         # Fallback: use first few words

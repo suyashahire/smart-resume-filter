@@ -17,13 +17,8 @@ const isBrowser = typeof window !== 'undefined';
  */
 export function setAuthToken(token: string | null) {
   authToken = token;
-  if (isBrowser) {
-    if (token) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      localStorage.removeItem('auth_token');
-    }
-  }
+  // Token persistence is now handled by HttpOnly cookies set by the backend.
+  // We keep the in-memory variable for the Authorization header fallback.
 }
 
 /**
@@ -62,6 +57,7 @@ async function apiRequest<T>(
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include',  // Send HttpOnly auth cookie
   });
 
   if (!response.ok) {
@@ -602,9 +598,10 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
-export async function deleteAccount(): Promise<{ message: string }> {
+export async function deleteAccount(password: string): Promise<{ message: string }> {
   return apiRequest('/auth/account', {
     method: 'DELETE',
+    body: JSON.stringify({ password }),
   });
 }
 

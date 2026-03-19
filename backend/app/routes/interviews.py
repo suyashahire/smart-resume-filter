@@ -397,9 +397,27 @@ async def list_interviews(
     if analyzed_only:
         query["is_analyzed"] = True
     
-    interviews = await Interview.find(
-        query
-    ).sort(-Interview.created_at).to_list()
+    # Apply score filters at DB level when possible
+    if min_score is not None or max_score is not None:
+        query["is_analyzed"] = True  # Score only exists on analyzed interviews
+        score_filter = {}
+        if min_score is not None:
+            score_filter["$gte"] = min_score
+        if max_score is not None:
+            score_filter["$lte"] = max_score
+        if score_filter:
+            query["analysis.sentiment_score"] = score_filter
+    
+    # If no search term, apply skip/limit at DB level for efficiency
+    if not search:
+        interviews = await Interview.find(
+            query
+        ).sort(-Interview.created_at).skip(skip).limit(limit).to_list()
+    else:
+        # Must fetch all to search across joined resume data
+        interviews = await Interview.find(
+            query
+        ).sort(-Interview.created_at).to_list()
     
     # Collect resume IDs to batch-lookup candidate info
     resume_ids = list(set(i.resume_id for i in interviews))
@@ -426,7 +444,7 @@ async def list_interviews(
         candidate_name = resume.candidate_name if resume and hasattr(resume, 'candidate_name') else None
         candidate_email = resume.candidate_email if resume and hasattr(resume, 'candidate_email') else None
         
-        # Search filter
+        # Search filter (applied in Python since it joins resume data)
         if search:
             search_lower = search.lower()
             name_match = candidate_name and search_lower in candidate_name.lower()
@@ -435,12 +453,7 @@ async def list_interviews(
             if not (name_match or email_match or file_match):
                 continue
         
-        # Score filters
         sentiment = interview.analysis.sentiment_score if interview.analysis else 0
-        if min_score is not None and sentiment < min_score:
-            continue
-        if max_score is not None and sentiment > max_score:
-            continue
         
         results.append(InterviewListResponse(
             id=str(interview.id),
@@ -454,7 +467,10 @@ async def list_interviews(
             created_at=interview.created_at,
         ))
     
-    return results[skip:skip + limit]
+    # If search was used, apply pagination in Python
+    if search:
+        return results[skip:skip + limit]
+    return results
 
 
 @router.get("/{interview_id}", response_model=InterviewAnalysisResponse)

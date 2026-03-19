@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 async def verify_websocket_token(token: Optional[str]) -> Optional[str]:
     """
     Verify JWT token for WebSocket connection.
-    Returns user_id if valid, None if invalid or no token.
+    Returns user_id if valid, None if invalid, revoked, or no token.
     """
     if not token:
         return None
@@ -31,7 +31,20 @@ async def verify_websocket_token(token: Optional[str]) -> Optional[str]:
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM]
         )
-        return payload.get("sub")  # user_id from token
+        user_id = payload.get("sub")
+        token_ver = payload.get("tv", 0)
+        
+        if not user_id:
+            return None
+        
+        # Verify token_version matches — rejects revoked tokens
+        user = await User.get(user_id)
+        if not user or not user.is_active:
+            return None
+        if getattr(user, 'token_version', 0) != token_ver:
+            return None
+        
+        return user_id
     except JWTError:
         return None
 
