@@ -163,52 +163,48 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      if (backendStatus === 'online') {
-        if (isRegistering) {
-          const response = await api.register(name, email, password, 'hr_manager', company || undefined);
+      if (isRegistering) {
+        const response = await api.register(name, email, password, 'hr_manager', company || undefined);
 
-          // Check if account is pending approval
-          if (!response.access_token || response.user.account_status === 'pending') {
-            setIsPendingApproval(true);
-            setIsLoading(false);
-            return;
-          }
-
-          setAuthToken(response.access_token);
-          setUser({
-            id: response.user.id,
-            name: response.user.name,
-            email: response.user.email,
-            role: response.user.role,
-            account_status: response.user.account_status,
-            company: response.user.company
-          });
-          setIsAuthenticated(true);
-          router.push('/dashboard');
-        } else {
-          const response = await api.login(email, password);
-
-          // Check if user is a candidate (should use candidate portal)
-          if (response.user.role === 'candidate') {
-            setError('This portal is for recruiters only. Please use the Candidate Portal.');
-            setIsLoading(false);
-            return;
-          }
-
-          setAuthToken(response.access_token);
-          setUser({
-            id: response.user.id,
-            name: response.user.name,
-            email: response.user.email,
-            role: response.user.role,
-            account_status: response.user.account_status,
-            company: response.user.company
-          });
-          setIsAuthenticated(true);
-          router.push('/dashboard');
+        // Check if account is pending approval
+        if (!response.access_token || response.user.account_status === 'pending') {
+          setIsPendingApproval(true);
+          setIsLoading(false);
+          return;
         }
+
+        setAuthToken(response.access_token);
+        setUser({
+          id: response.user.id,
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role,
+          account_status: response.user.account_status,
+          company: response.user.company
+        });
+        setIsAuthenticated(true);
+        router.push('/dashboard');
       } else {
-        throw new Error('Backend server is offline. Please try again later.');
+        const response = await api.login(email, password);
+
+        // Check if user is a candidate (should use candidate portal)
+        if (response.user.role === 'candidate') {
+          setError('This portal is for recruiters only. Please use the Candidate Portal.');
+          setIsLoading(false);
+          return;
+        }
+
+        setAuthToken(response.access_token);
+        setUser({
+          id: response.user.id,
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role,
+          account_status: response.user.account_status,
+          company: response.user.company
+        });
+        setIsAuthenticated(true);
+        router.push('/dashboard');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
@@ -804,8 +800,8 @@ export default function LoginPage() {
                     value={password}
                     onChange={setPassword}
                     placeholder="••••••••"
-                    minLength={isRegistering ? 12 : undefined}
-                    hint={isRegistering ? 'Minimum 12 characters, must include a letter and digit' : undefined}
+                    minLength={isRegistering ? 8 : undefined}
+                    hint={isRegistering ? 'Minimum 8 characters, must include a letter and digit' : undefined}
                     endAdornment={
                       <button
                         type="button"
@@ -833,7 +829,7 @@ export default function LoginPage() {
                   {/* Submit */}
                   <motion.button
                     type="submit"
-                    disabled={isLoading || backendStatus !== 'online'}
+                    disabled={isLoading}
                     className="hr-submit"
                     whileHover={{ scale: isLoading ? 1 : 1.01 }}
                     whileTap={{ scale: isLoading ? 1 : 0.99 }}

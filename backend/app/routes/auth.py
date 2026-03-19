@@ -237,7 +237,7 @@ async def register(request: Request, user_data: UserCreate):
     
     - **name**: User's full name
     - **email**: User's email address (must be unique)
-    - **password**: Password (minimum 12 characters, must contain letter + digit)
+    - **password**: Password (minimum 8 characters, must contain letter + digit)
     - **role**: User role (hr_manager, admin, viewer, candidate)
     
     Registration behavior:
@@ -451,7 +451,7 @@ async def update_current_user(
 class ChangePasswordRequest(BaseModel):
     """Schema for password change requests."""
     current_password: str
-    new_password: str = Field(..., min_length=12)
+    new_password: str = Field(..., min_length=8)
 
     @field_validator('new_password')
     @classmethod

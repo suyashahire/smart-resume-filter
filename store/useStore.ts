@@ -446,12 +446,13 @@ export const useStore = create<StoreState>()(
 
       setAuthToken: (token) => {
         set({ authToken: token });
-        // Also store in localStorage for API client
         if (typeof window !== 'undefined') {
           if (token) {
             localStorage.setItem('auth_token', token);
+            document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
           } else {
             localStorage.removeItem('auth_token');
+            document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
           }
         }
       },
@@ -459,11 +460,10 @@ export const useStore = create<StoreState>()(
       setIsAuthenticated: (auth) => set({ isAuthenticated: auth }),
 
       logout: () => {
-        // Clear localStorage
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth_token');
-          // Also clear the persisted zustand storage to prevent stale data on re-login
           localStorage.removeItem('hireq-storage');
+          document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
         }
         set({
           user: null,

@@ -4,7 +4,8 @@
  * This module handles all communication with the backend API.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const _raw = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = _raw.endsWith('/api') ? _raw : `${_raw.replace(/\/+$/, '')}/api`;
 
 // Token storage
 let authToken: string | null = null;
@@ -17,8 +18,9 @@ const isBrowser = typeof window !== 'undefined';
  */
 export function setAuthToken(token: string | null) {
   authToken = token;
-  // Token persistence is now handled by HttpOnly cookies set by the backend.
-  // We keep the in-memory variable for the Authorization header fallback.
+  if (isBrowser && !token) {
+    document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
+  }
 }
 
 /**

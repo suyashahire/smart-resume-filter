@@ -98,7 +98,8 @@ uploads/
 # Backend environment
 backend/.env
 backend/.env.local
-backend/.env.production
+# NOTE: backend/.env.production is a TEMPLATE with placeholders, safe to commit
+# The actual .env on the server is created from it
 
 # ChromaDB data (RAG vector store)
 backend/chroma_data/
