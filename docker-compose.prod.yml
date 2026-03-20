@@ -2,7 +2,9 @@
 #
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# This file overrides the base docker-compose.yml for production deployment
+# This file overrides the base docker-compose.yml for production deployment.
+# For the recommended deployment (Vercel + single Droplet), use the deploy scripts
+# in deploy/ instead. This file is for fully self-hosted Docker Compose deployments.
 
 services:
   # ===========================================================================
@@ -10,7 +12,7 @@ services:
   # ===========================================================================
   mongodb:
     # Use MongoDB Atlas in production instead (remove this service)
-    # This is for self-hosted production deployments
+    # This is for self-hosted production deployments only
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
@@ -40,17 +42,16 @@ services:
     environment:
       DEBUG: "false"
       ENVIRONMENT: production
+      FRONTEND_URL: ${FRONTEND_URL:-https://hireq.tech}
     deploy:
       resources:
         limits:
           memory: 4G
         reservations:
           memory: 2G
-      replicas: 2
-    # Add Nginx/Traefik labels for reverse proxy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`${API_DOMAIN:-api.yourdomain.com}`)"
+      - "traefik.http.routers.backend.rule=Host(`${API_DOMAIN:-api.hireq.tech}`)"
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
 
@@ -60,8 +61,8 @@ services:
   frontend:
     build:
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.hireq.tech/api}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://hireq.tech}
     deploy:
       resources:
         limits:
@@ -70,12 +71,12 @@ services:
           memory: 512M
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`${APP_DOMAIN:-yourdomain.com}`)"
+      - "traefik.http.routers.frontend.rule=Host(`${APP_DOMAIN:-hireq.tech}`)"
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
 
   # ===========================================================================
-  # Traefik Reverse Proxy (optional - for self-hosted production)
+  # Traefik Reverse Proxy (for self-hosted production only)
   # ===========================================================================
   traefik:
     image: traefik:v2.10
@@ -91,8 +92,6 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      # Redirect HTTP to HTTPS (all traffic forced to port 443)
-      # This handles fix #23: HTTPS enforcement at the infrastructure level
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
     ports:
@@ -105,7 +104,7 @@ services:
       - hireq-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DOMAIN:-traefik.yourdomain.com}`)"
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DOMAIN:-traefik.hireq.tech}`)"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls=true"
       - "traefik.http.routers.dashboard.middlewares=auth"

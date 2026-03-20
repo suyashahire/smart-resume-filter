@@ -143,7 +143,7 @@ class HireQEmailService:
                             <tr>
                                 <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
                                     <p style="color: #6b7280; font-size: 12px; margin: 0;">
-                                        © 2024 HireQ. All rights reserved.
+                                        © 2026 HireQ. All rights reserved.
                                     </p>
                                     <p style="color: #9ca3af; font-size: 11px; margin: 10px 0 0 0;">
                                         You received this email because you have an account on HireQ.
@@ -525,7 +525,7 @@ def get_email_service() -> HireQEmailService:
         if hasattr(settings, 'RESEND_API_KEY') and settings.RESEND_API_KEY:
             provider = ResendEmailService(
                 api_key=settings.RESEND_API_KEY,
-                from_email=getattr(settings, 'FROM_EMAIL', 'noreply@hireq.app')
+                from_email=getattr(settings, 'FROM_EMAIL', 'noreply@hireq.tech')
             )
             logger.info("Email service initialized with Resend")
         else:

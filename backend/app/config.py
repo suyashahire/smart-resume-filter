@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     
     # Email Configuration (Resend)
     RESEND_API_KEY: str = ""  # Get API key at: https://resend.com
-    FROM_EMAIL: str = "noreply@hireq.app"
+    FROM_EMAIL: str = "noreply@hireq.tech"
     
     # Upload directory (local fallback)
     UPLOAD_DIR: str = "uploads"

@@ -157,7 +157,7 @@ if settings.FRONTEND_URL:
 cors_origin_regex = None
 if settings.FRONTEND_URL and "vercel.app" in settings.FRONTEND_URL:
     # Only allow Vercel URLs matching our project slug
-    cors_origin_regex = r"https://smart-resume-filter[\w-]*\.vercel\.app"
+    cors_origin_regex = r"https://hireq[\w-]*\.vercel\.app"
 # In development, no wildcard regex — only the explicit localhost origins above
 
 app.add_middleware(

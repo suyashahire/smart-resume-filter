@@ -1,0 +1,37 @@
+# HireQ Backend — systemd service file (optional)
+# Use this if you prefer systemd over docker --restart
+#
+# Install:
+#   cp /opt/hireq/deploy/hireq-backend.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable hireq-backend
+#   systemctl start hireq-backend
+
+[Unit]
+Description=HireQ Backend (Docker)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=simple
+User=hireq
+Group=hireq
+WorkingDirectory=/opt/hireq/backend
+
+ExecStartPre=-/usr/bin/docker stop hireq-backend
+ExecStartPre=-/usr/bin/docker rm hireq-backend
+
+ExecStart=/usr/bin/docker run \
+  --name hireq-backend \
+  --env-file /opt/hireq/backend/.env \
+  -p 127.0.0.1:8000:8000 \
+  -v /opt/hireq/backend/uploads:/app/uploads \
+  hireq-backend
+
+ExecStop=/usr/bin/docker stop hireq-backend
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
