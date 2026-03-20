@@ -13,14 +13,41 @@ let authToken: string | null = null;
 // SSR-safe localStorage helpers
 const isBrowser = typeof window !== 'undefined';
 
+const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24; // 1 day (middleware gate; JWT expiry enforced by API)
+
 /**
- * Set the authentication token
+ * Mirror token to localStorage + document.cookie so Next.js middleware can read auth_token
+ * on the app origin (API Set-Cookie is scoped to the API host only).
+ */
+function persistAuthToBrowser(token: string | null) {
+  if (!isBrowser) return;
+  if (!token) {
+    localStorage.removeItem('auth_token');
+    let cleared = 'auth_token=; path=/; max-age=0; SameSite=Lax';
+    if (window.location.protocol === 'https:') cleared += '; Secure';
+    document.cookie = cleared;
+    return;
+  }
+  localStorage.setItem('auth_token', token);
+  const value = encodeURIComponent(token);
+  let cookie = `auth_token=${value}; path=/; max-age=${AUTH_COOKIE_MAX_AGE}; SameSite=Lax`;
+  if (window.location.protocol === 'https:') cookie += '; Secure';
+  document.cookie = cookie;
+}
+
+/**
+ * Set the authentication token (memory + localStorage + cookie for middleware)
  */
 export function setAuthToken(token: string | null) {
   authToken = token;
-  if (isBrowser && !token) {
-    document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
+  persistAuthToBrowser(token);
+}
+
+function shouldRedirectToLoginOn401(endpoint: string): boolean {
+  if (endpoint.includes('/auth/login') || endpoint.includes('/auth/register')) {
+    return false;
   }
+  return true;
 }
 
 /**
@@ -63,8 +90,9 @@ async function apiRequest<T>(
   });
 
   if (!response.ok) {
-    if (response.status === 401 && isBrowser) {
+    if (response.status === 401 && isBrowser && shouldRedirectToLoginOn401(endpoint)) {
       setAuthToken(null);
+      localStorage.removeItem('hireq-storage');
       const isCandidate = window.location.pathname.startsWith('/candidate');
       window.location.href = isCandidate ? '/candidate/login' : '/login';
       throw new Error('Session expired. Please log in again.');

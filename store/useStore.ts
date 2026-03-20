@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { setAuthToken as syncApiClientAuth } from '@/lib/api';
 
 export interface Resume {
   id: string;
@@ -446,24 +447,15 @@ export const useStore = create<StoreState>()(
 
       setAuthToken: (token) => {
         set({ authToken: token });
-        if (typeof window !== 'undefined') {
-          if (token) {
-            localStorage.setItem('auth_token', token);
-            document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
-          } else {
-            localStorage.removeItem('auth_token');
-            document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
-          }
-        }
+        syncApiClientAuth(token);
       },
 
       setIsAuthenticated: (auth) => set({ isAuthenticated: auth }),
 
       logout: () => {
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('auth_token');
+          syncApiClientAuth(null);
           localStorage.removeItem('hireq-storage');
-          document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
         }
         set({
           user: null,
